@@ -1,0 +1,4 @@
+.vscode
+w16asm
+.depend
+*.o

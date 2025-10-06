@@ -24,8 +24,8 @@ static bool isHexDigit(char ch) {
 
 static int hexDigitToNumber(char ch) {
     return ch >= '0' && ch <= '9'
-        ? '0' - ch
-        : 10 + 'A' - toUppercaseChar(ch);
+        ? ch - '0'
+        : 10 + toUppercaseChar(ch) - 'A';
 }
 
 struct TokenizerState getInitialTokenizerState() {
@@ -120,7 +120,7 @@ void parseChar(struct TokenizerState* state, int ch) {
         case TokenTypeDecimalNumber:
             if (ch >= '0' && ch <= '9') {
                 state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                int newDigit = '0' - ch;
+                int newDigit = ch - '0';
                 int sign = state->tokens[state->currentTokenIndex].numberValue >= 0 ? 1 : -1;
                 state->tokens[state->currentTokenIndex].numberValue *= 10;
                 state->tokens[state->currentTokenIndex].numberValue += sign * newDigit;
@@ -135,7 +135,7 @@ void parseChar(struct TokenizerState* state, int ch) {
         case _TokenTypeMinus:
             if (ch >= '0' && ch <= '9') {
                 state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                int newDigit = '0' - ch;
+                int newDigit = ch - '0';
                 state->tokens[state->currentTokenIndex].numberValue = -newDigit;
             } else {
                 state->error = true;
@@ -146,7 +146,7 @@ void parseChar(struct TokenizerState* state, int ch) {
             if (ch >= '0' && ch <= '7') {
                 state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
                 state->tokens[state->currentTokenIndex].tokenType = TokenTypeOctalNumber;
-                state->tokens[state->currentTokenIndex].numberValue = '0' - ch;
+                state->tokens[state->currentTokenIndex].numberValue = ch - '0';
             } else if (ch == 'x' || ch == 'X') {
                 state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
                 state->tokens[state->currentTokenIndex].tokenType = TokenTypeHexNumber;
@@ -183,7 +183,7 @@ void parseChar(struct TokenizerState* state, int ch) {
             if (ch >= '0' && ch <= '7') {
                 state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
                 state->tokens[state->currentTokenIndex].numberValue *= 010;
-                state->tokens[state->currentTokenIndex].numberValue += '0' - ch;
+                state->tokens[state->currentTokenIndex].numberValue += ch - '0';
                 validateNumberInRange(state);
             } else if (isspace(ch)) {
                 endToken(state);
@@ -196,7 +196,7 @@ void parseChar(struct TokenizerState* state, int ch) {
             if (ch == '0' || ch == '1') {
                 state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
                 state->tokens[state->currentTokenIndex].numberValue *= 0b10;
-                state->tokens[state->currentTokenIndex].numberValue += '0' - ch;
+                state->tokens[state->currentTokenIndex].numberValue += ch - '0';
                 validateNumberInRange(state);
             } else if (isspace(ch)) {
                 if (state->currentTokenStringValueIndex == 2) {

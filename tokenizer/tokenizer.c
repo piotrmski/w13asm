@@ -6,17 +6,18 @@
 #include <limits.h>
 #include <stdbool.h>
 
+struct TokenizerState {
+    char stringValue[MAX_NAME_LEN_INCL_0];
+    int stringValueIndex;
+    bool isEscapeSequence;
+    bool isHexEscapeSequence;
+    char hexEscapeSequenceChar1;
+};
+
 static char toUppercaseChar(char ch) {
     if (ch >= 'a' && ch <= 'z') return ch - 0x20;
     else return ch;
 }
-
-// static void toUppercase(char* string) {
-//     while (*string != 0) {
-//         *string = toUppercaseChar(*string);
-//         ++string;
-//     }
-// }
 
 static bool isHexDigit(char ch) {
     return ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f' || ch >= 'A' && ch <= 'F';
@@ -28,199 +29,203 @@ static int hexDigitToNumber(char ch) {
         : 10 + toUppercaseChar(ch) - 'A';
 }
 
-struct TokenizerState getInitialTokenizerState() {
-    return (struct TokenizerState){ false, { (struct Token){ TokenTypeNone, 0, NULL } }, 0, "", 0, 1, false, false, ' ' };
-}
-
-static void endToken(struct TokenizerState* state) {
-    state->currentTokenStringValue[state->currentTokenStringValueIndex] = 0;
-    state->currentTokenStringValueIndex = 0;
-    int length = strlen(state->currentTokenStringValue);
-    state->tokens[state->currentTokenIndex].stringValue = malloc(length + 1);
-    memcpy(state->tokens[state->currentTokenIndex].stringValue, state->currentTokenStringValue, length + 1);
-    ++state->currentTokenIndex;
-}
-
-static void validateNumberInRange(struct TokenizerState* state) {
-    if (state->tokens[state->currentTokenIndex].numberValue < SHRT_MIN ||
-        state->tokens[state->currentTokenIndex].numberValue > USHRT_MAX) {
-        state->error = true;
-        printf("Error on line %d: number out of range.", state->lineNumber);
+static bool validateNumberInRange(struct Token* token) {
+    if (token->numberValue < SHRT_MIN ||
+        token->numberValue > USHRT_MAX) {
+        printf("Error on line %d: number out of range.", token->lineNumber);
+        return false;
     }
+    return true;
 }
- 
-void parseChar(struct TokenizerState* state, int ch) {
+
+static bool submitToken(struct Token* token, struct TokenizerState* state) {
+    state->stringValue[state->stringValueIndex] = 0;
+    int length = strlen(state->stringValue);
+    token->stringValue = malloc(length + 1);
+    memcpy(token->stringValue, state->stringValue, length + 1);
+    return true;
+}
+
+static bool submitError(struct Token* token) {
+    token->type = TokenTypeError;
+    return true;
+}
+
+static bool parseChar(struct Token* token, struct TokenizerState* state, int ch) {
     if (ch == '\n') {
-        state->lineNumber++;
+        ++token->lineNumber;
     }
 
-    switch (state->tokens[state->currentTokenIndex].tokenType) {
+    switch (token->type) {
         case TokenTypeNone:
-            state->currentTokenStringValue[0] = ch;
-            state->currentTokenStringValueIndex = 1;
+            state->stringValue[0] = ch;
+            state->stringValueIndex = 1;
             
             if (ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z') {
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeLabelUseOrInstruction;
+                token->type = TokenTypeLabelUseOrInstruction;
             } else if (ch == '-') {
-                state->tokens[state->currentTokenIndex].tokenType = _TokenTypeMinus;
+                token->type = _TokenTypeMinus;
             } else if (ch == '0') {
-                state->tokens[state->currentTokenIndex].tokenType = _TokenTypeZero;
-                state->tokens[state->currentTokenIndex].numberValue = 0;
+                token->type = _TokenTypeZero;
+                token->numberValue = 0;
             } else if (ch >= '1' && ch <= '9') {
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeDecimalNumber;
-                state->tokens[state->currentTokenIndex].numberValue = ch - '0';
+                token->type = TokenTypeDecimalNumber;
+                token->numberValue = ch - '0';
             } else if (ch == '.') {
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeDirective;
+                token->type = TokenTypeDirective;
             } else if (ch == ';') {
-                state->tokens[state->currentTokenIndex].tokenType = _TokenTypeComment;
+                token->type = _TokenTypeComment;
             } else if (ch == '\'') {
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeNZTString;
-                state->currentTokenStringValueIndex = 0;
+                token->type = TokenTypeNZTString;
+                state->stringValueIndex = 0;
             } else if (ch == '"') {
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeZTString;
-                state->currentTokenStringValueIndex = 0;
+                token->type = TokenTypeZTString;
+                state->stringValueIndex = 0;
             } else if (!isspace(ch)) {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case _TokenTypeComment:
             if (ch == '\n') {
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeNone;
+                token->type = TokenTypeNone;
             }
             break;
         case TokenTypeLabelUseOrInstruction:
             if (ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9') {
-                if (state->currentTokenStringValueIndex + 1 >= MAX_NAME_LEN_INCL_0) {
-                    state->error = true;
-                    printf("Error on line %d: label name too long.", state->lineNumber);
+                if (state->stringValueIndex + 1 >= MAX_NAME_LEN_INCL_0) {
+                    printf("Error on line %d: label name too long.", token->lineNumber);
+                    return submitError(token);
                 } else {
-                    state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
+                    state->stringValue[state->stringValueIndex++] = ch;
                 }
             } else if (ch == ':' || isspace(ch)) {
                 if (ch == ':') {
-                    state->tokens[state->currentTokenIndex].tokenType = TokenTypeLabelDefinition;
+                    token->type = TokenTypeLabelDefinition;
                 }
-                endToken(state);
+                return submitToken(token, state);
             } else {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case TokenTypeDirective:
             if (ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
+                state->stringValue[state->stringValueIndex++] = ch;
             } else if (isspace(ch)) {
-                endToken(state);
+                return submitToken(token, state);
             } else {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case TokenTypeDecimalNumber:
             if (ch >= '0' && ch <= '9') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
+                state->stringValue[state->stringValueIndex++] = ch;
                 int newDigit = ch - '0';
-                int sign = state->tokens[state->currentTokenIndex].numberValue >= 0 ? 1 : -1;
-                state->tokens[state->currentTokenIndex].numberValue *= 10;
-                state->tokens[state->currentTokenIndex].numberValue += sign * newDigit;
-                validateNumberInRange(state);
+                int sign = token->numberValue >= 0 ? 1 : -1;
+                token->numberValue *= 10;
+                token->numberValue += sign * newDigit;
+                if (!validateNumberInRange(token)) { return submitError(token); }
             } else if (isspace(ch)) {
-                endToken(state);
+                return submitToken(token, state);
             } else {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case _TokenTypeMinus:
             if (ch >= '0' && ch <= '9') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
+                state->stringValue[state->stringValueIndex++] = ch;
                 int newDigit = ch - '0';
-                state->tokens[state->currentTokenIndex].numberValue = -newDigit;
+                token->numberValue = -newDigit;
             } else {
-                state->error = true;
-                printf("Error on line %d: invalid use of '-'.", state->lineNumber);
+                printf("Error on line %d: invalid use of '-'.", token->lineNumber);
+                return submitError(token);
             }
             break;
         case _TokenTypeZero:
             if (ch >= '0' && ch <= '7') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeOctalNumber;
-                state->tokens[state->currentTokenIndex].numberValue = ch - '0';
+                state->stringValue[state->stringValueIndex++] = ch;
+                token->type = TokenTypeOctalNumber;
+                token->numberValue = ch - '0';
             } else if (ch == 'x' || ch == 'X') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeHexNumber;
+                state->stringValue[state->stringValueIndex++] = ch;
+                token->type = TokenTypeHexNumber;
             } else if (ch == 'b' || ch == 'B') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeBinaryNumber;
+                state->stringValue[state->stringValueIndex++] = ch;
+                token->type = TokenTypeBinaryNumber;
             } else if (isspace(ch)) {
-                state->tokens[state->currentTokenIndex].tokenType = TokenTypeDecimalNumber;
-                endToken(state);
+                token->type = TokenTypeDecimalNumber;
+                return submitToken(token, state);
             } else {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case TokenTypeHexNumber:
             if (isHexDigit(ch)) {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                state->tokens[state->currentTokenIndex].numberValue *= 0x10;
-                state->tokens[state->currentTokenIndex].numberValue += hexDigitToNumber(ch);
-                validateNumberInRange(state);
+                state->stringValue[state->stringValueIndex++] = ch;
+                token->numberValue *= 0x10;
+                token->numberValue += hexDigitToNumber(ch);
+                if (!validateNumberInRange(token)) { return submitError(token); }
             } else if (isspace(ch)) {
-                if (state->currentTokenStringValueIndex == 2) {
-                    state->error = true;
-                    printf("Error on line %d: number without digits.", state->lineNumber);
+                if (state->stringValueIndex == 2) {
+                    printf("Error on line %d: number without digits.", token->lineNumber);
+                    return submitError(token);
                 } else {
-                    endToken(state);
+                    return submitToken(token, state);
                 }
             } else {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case TokenTypeOctalNumber:
             if (ch >= '0' && ch <= '7') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                state->tokens[state->currentTokenIndex].numberValue *= 010;
-                state->tokens[state->currentTokenIndex].numberValue += ch - '0';
-                validateNumberInRange(state);
+                state->stringValue[state->stringValueIndex++] = ch;
+                token->numberValue *= 010;
+                token->numberValue += ch - '0';
+                if (!validateNumberInRange(token)) { return submitError(token); }
             } else if (isspace(ch)) {
-                endToken(state);
+                return submitToken(token, state);
             } else {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case TokenTypeBinaryNumber:
             if (ch == '0' || ch == '1') {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
-                state->tokens[state->currentTokenIndex].numberValue *= 0b10;
-                state->tokens[state->currentTokenIndex].numberValue += ch - '0';
-                validateNumberInRange(state);
+                state->stringValue[state->stringValueIndex++] = ch;
+                token->numberValue *= 0b10;
+                token->numberValue += ch - '0';
+                if (!validateNumberInRange(token)) { return submitError(token); }
             } else if (isspace(ch)) {
-                if (state->currentTokenStringValueIndex == 2) {
-                    state->error = true;
-                    printf("Error on line %d: number without digits.", state->lineNumber);
+                if (state->stringValueIndex == 2) {
+                    printf("Error on line %d: number without digits.", token->lineNumber);
+                    return submitError(token);
                 } else {
-                    endToken(state);
+                    return submitToken(token, state);
                 }
             } else {
-                state->error = true;
-                printf("Error on line %d: unexpected character '%c'.", state->lineNumber, ch);
+                printf("Error on line %d: unexpected character '%c'.", token->lineNumber, ch);
+                return submitError(token);
             }
             break;
         case TokenTypeZTString:
         case TokenTypeNZTString:
-            if (state->isHexEscapeSequence) {
+            if (state->stringValueIndex == MAX_STR_VAL_LEN_INCL_0 - 1) {
+                printf("Error on line %d: string too long.", token->lineNumber);
+                return submitError(token);
+            } else if (state->isHexEscapeSequence) {
                 if (state->hexEscapeSequenceChar1 == 0) {
                     state->hexEscapeSequenceChar1 = ch;
                 } else if (!isHexDigit(state->hexEscapeSequenceChar1) || !isHexDigit(ch)) {
-                    state->error = true;
-                    printf("Error on line %d: invalid escape sequence '\\x%c%c'.", state->lineNumber, state->hexEscapeSequenceChar1, ch);
+                    printf("Error on line %d: invalid escape sequence '\\x%c%c'.", token->lineNumber, state->hexEscapeSequenceChar1, ch);
+                    return submitError(token);
                 } else {
                     char escapeSequenceChar = 0x10 * hexDigitToNumber(state->hexEscapeSequenceChar1) + hexDigitToNumber(ch);
-                    state->currentTokenStringValue[state->currentTokenStringValueIndex++] = escapeSequenceChar;
+                    state->stringValue[state->stringValueIndex++] = escapeSequenceChar;
                     state->isHexEscapeSequence = false;
                     state->hexEscapeSequenceChar1 = 0;
                 }
@@ -230,60 +235,82 @@ void parseChar(struct TokenizerState* state, int ch) {
                 if (ch == 'x' || ch == 'X') {
                     state->isHexEscapeSequence = true;
                 } else if (ch == '\'' || ch == '"' || ch == '\\') {
-                    state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
+                    state->stringValue[state->stringValueIndex++] = ch;
                 } else if (ch == 'n' || ch == 'N') {
-                    state->currentTokenStringValue[state->currentTokenStringValueIndex++] = '\n';
+                    state->stringValue[state->stringValueIndex++] = '\n';
                 } else if (ch == 't' || ch == 'T') {
-                    state->currentTokenStringValue[state->currentTokenStringValueIndex++] = '\t';
+                    state->stringValue[state->stringValueIndex++] = '\t';
                 } else if (ch == 'r' || ch == 'R') {
-                    state->currentTokenStringValue[state->currentTokenStringValueIndex++] = '\r';
+                    state->stringValue[state->stringValueIndex++] = '\r';
                 } else {
-                    state->error = true;
-                    printf("Error on line %d: invalid escape sequence '\\%c'.", state->lineNumber, ch);
+                    printf("Error on line %d: invalid escape sequence '\\%c'.", token->lineNumber, ch);
+                    return submitError(token);
                 }
             } else if (ch == '\\') {
                 state->isEscapeSequence = true;
-            } else if (ch == (state->tokens[state->currentTokenIndex].tokenType == TokenTypeZTString ? '"' : '\'')) {
-                endToken(state);
+            } else if (ch == (token->type == TokenTypeZTString ? '"' : '\'')) {
+                return submitToken(token, state);
             } else {
-                state->currentTokenStringValue[state->currentTokenStringValueIndex++] = ch;
+                state->stringValue[state->stringValueIndex++] = ch;
             }
             break;
         default: 
             break;
     }
+
+    return false;
 }
 
-void validateEof(struct TokenizerState* state) {
-    if (state->error) { return; }
+static void validateEof(struct Token* token, struct TokenizerState* state) {
+    if (token->type == TokenTypeError) { return; }
 
-    if (state->tokens[state->currentTokenIndex].tokenType == _TokenTypeComment) {
-        state->tokens[state->currentTokenIndex].tokenType = TokenTypeNone;
+    if (token->type == _TokenTypeComment) {
+        token->type = TokenTypeNone;
     }
 
-    if (state->tokens[state->currentTokenIndex].tokenType == _TokenTypeZero) {
-        state->tokens[state->currentTokenIndex].tokenType = TokenTypeDecimalNumber;
+    if (token->type == _TokenTypeZero) {
+        token->type = TokenTypeDecimalNumber;
     }
 
-    if (state->tokens[state->currentTokenIndex].tokenType == _TokenTypeMinus) {
-        state->error = true;
-        printf("Error on line %d: invalid use of '-'.", state->lineNumber);
+    if (token->type == _TokenTypeMinus) {
+        token->type = TokenTypeError;
+        printf("Error on line %d: invalid use of '-'.", token->lineNumber);
     }
 
-    if ((state->tokens[state->currentTokenIndex].tokenType == TokenTypeBinaryNumber
-        || state->tokens[state->currentTokenIndex].tokenType == TokenTypeHexNumber)
-        && state->currentTokenStringValueIndex == 2) {
-        state->error = true;
-        printf("Error on line %d: number without digits.", state->lineNumber);
+    if ((token->type == TokenTypeBinaryNumber
+        || token->type == TokenTypeHexNumber)
+        && state->stringValueIndex == 2) {
+        token->type = TokenTypeError;
+        printf("Error on line %d: number without digits.", token->lineNumber);
     }
 
-    if (state->tokens[state->currentTokenIndex].tokenType == TokenTypeZTString
-        || state->tokens[state->currentTokenIndex].tokenType == TokenTypeNZTString) {
-        state->error = true;
-        printf("Error on line %d: unterminated string literal.", state->lineNumber);
+    if (token->type == TokenTypeZTString
+        || token->type == TokenTypeNZTString) {
+        token->type = TokenTypeError;
+        printf("Error on line %d: unterminated string literal.", token->lineNumber);
     }
 
-    if (!state->error) {
-        endToken(state);
+    if (token->type != TokenTypeError) {
+        submitToken(token, state);
     }
+}
+
+struct Token getInitialTokenState() {
+    return (struct Token) { 1, TokenTypeNone, 0, 0 };
+}
+
+void getToken(struct Token* token, FILE* filePtr) {
+    token->type = TokenTypeNone;
+    token->numberValue = 0;
+    token->stringValue = NULL;
+
+    struct TokenizerState state = { { 0 }, 0, false, false, 0 };
+
+    int ch;
+
+    while ((ch = getc(filePtr)) != EOF) {
+        if (parseChar(token, &state, ch)) { return; }
+    }
+
+    validateEof(token, &state);
 }

@@ -17,23 +17,14 @@ int main(int argc, const char * argv[]) {
         return 1;
     }
 
-    struct TokenizerState tokenizerState = getInitialTokenizerState();
+    struct Token token = getInitialTokenState();
 
-    int ch;
-    while ((ch = getc(asmFile)) != EOF && !tokenizerState.error) {
-        parseChar(&tokenizerState, ch);
-    }
+    do {
+        getToken(&token, asmFile);
+        printf("%d\t%s\t%d\n", token.lineNumber, token.stringValue, token.numberValue);
+    } while (token.type != TokenTypeNone && token.type != TokenTypeError);
 
     fclose(asmFile);
-
-    validateEof(&tokenizerState);
-
-    if (tokenizerState.error) { return 1; }
-
-    for (int i = 0; tokenizerState.tokens[i].tokenType != TokenTypeNone; ++i) {
-        printf("%s\t%d\n", tokenizerState.tokens[i].stringValue, tokenizerState.tokens[i].numberValue);
-    }
-
 
     return 0;
 }

@@ -14,7 +14,7 @@ struct TokenizerState {
     char hexEscapeSequenceChar1;
 };
 
-static char toUppercaseChar(char ch) {
+static char uc(char ch) {
     if (ch >= 'a' && ch <= 'z') return ch - 0x20;
     else return ch;
 }
@@ -26,7 +26,7 @@ static bool isHexDigit(char ch) {
 static int hexDigitToNumber(char ch) {
     return ch >= '0' && ch <= '9'
         ? ch - '0'
-        : 10 + toUppercaseChar(ch) - 'A';
+        : 10 + uc(ch) - 'A';
 }
 
 static bool validateNumberInRange(struct Token* token) {

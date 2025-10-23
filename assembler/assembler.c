@@ -1,6 +1,7 @@
 #include "assembler.h"
 #include "../tokenizer/tokenizer.h"
 #include <stdbool.h>
+#include <string.h>
 #include <stdio.h>
 
 #define ADDRESS_SPACE_SIZE 0x2000
@@ -41,7 +42,7 @@ struct AssemblerState {
     int labelUsesIndex;
 };
 
-static isMemoryViolation(struct Token* token, struct AssemblerState* state) {
+static bool isMemoryViolation(struct AssemblerState* state, struct Token* token) {
     if (state->address >= PROGRAM_MEMORY_SIZE) {
         printf("Error on line %d: attempting to declare memory value outside of memory space.\n", token->lineNumber);
         return true;
@@ -51,6 +52,8 @@ static isMemoryViolation(struct Token* token, struct AssemblerState* state) {
         printf("Error on line %d: attempting to override memory value.\n", token->lineNumber);
         return true;
     }
+
+    return false;
 }
 
 static char uc(char ch) {
@@ -67,7 +70,7 @@ static enum Instruction getInstruction(char* name) {
         return InstructionAdd;
     } else if (uc(name[0]) == 'A' && uc(name[1]) == 'N' && uc(name[2]) == 'D' && name[3] == 0) {
         return InstructionAnd;
-    } else if (c(name[0]) == 'S' && uc(name[1]) == 'T' && name[2] == 0) {
+    } else if (uc(name[0]) == 'S' && uc(name[1]) == 'T' && name[2] == 0) {
         return InstructionSt;
     } else if (uc(name[0]) == 'J' && uc(name[1]) == 'M' && uc(name[2]) == 'P' && name[3] == 0) {
         return InstructionJmp;
@@ -114,7 +117,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                 if (isMemoryViolation(state, token)) { return true; }
                 state->programMemory[state->address] = (char)instruction << 13;
                 state->programMemoryWritten[state->address] = true;
-                getToken(&token, filePtr);
+                getToken(token, filePtr);
                 switch (token->type) {
                     case TokenTypeDecimalNumber:
                     case TokenTypeHexNumber:
@@ -147,7 +150,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
             enum Directive directive = getDirective(token->stringValue);
             switch (directive) {
                 case DirectiveOrg:
-                    getToken(&token, filePtr);
+                    getToken(token, filePtr);
                     switch (token->type) {
                         case TokenTypeDecimalNumber:
                         case TokenTypeHexNumber:
@@ -170,7 +173,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                 case DirectiveFill:
                     unsigned short valueToFill;
                     unsigned short fillCount;
-                    getToken(&token, filePtr);
+                    getToken(token, filePtr);
                     switch (token->type) {
                         case TokenTypeDecimalNumber:
                         case TokenTypeHexNumber:
@@ -189,7 +192,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                             printf("Error on line %d: unexpected token following .FILL.\n", token->lineNumber);
                             return true;
                     }
-                    getToken(&token, filePtr);
+                    getToken(token, filePtr);
                     switch (token->type) {
                         case TokenTypeDecimalNumber:
                         case TokenTypeHexNumber:
@@ -229,9 +232,9 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
         case TokenTypeZTString:
         case TokenTypeNZTString:
             char* strptr = token->stringValue;
-            while(&strptr != 0) {
+            while(*strptr != 0) {
                 if (isMemoryViolation(state, token)) { return true; }
-                state->programMemory[state->address] = &strptr;
+                state->programMemory[state->address] = *strptr;
                 state->programMemoryWritten[state->address++] = true;
                 ++strptr;
             }
@@ -248,6 +251,16 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
     }
 
     return false;
+}
+
+struct LabelInfo* findLabelDefinition(struct AssemblerState* state, char* labelName) {
+    for (int i = 0; i < state->labelDefinitionsIndex; ++i) {
+        if (strcmp(state->labelDefinitions[i].name, labelName) == 0) {
+            return &state->labelDefinitions[i];
+        }
+    }
+
+    return NULL;
 }
 
 unsigned short* assemble(FILE* filePtr) {

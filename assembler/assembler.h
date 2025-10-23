@@ -1,5 +1,6 @@
 #ifndef assembler
 #define assembler
+#include <stdio.h>
 
 #define PROGRAM_MEMORY_SIZE 0x1fff
 

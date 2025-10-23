@@ -73,6 +73,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 token->numberValue = ch - '0';
             } else if (ch == '.') {
                 token->type = TokenTypeDirective;
+                state->stringValueIndex = 0;
             } else if (ch == ';') {
                 token->type = _TokenTypeComment;
             } else if (ch == '\'') {

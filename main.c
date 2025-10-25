@@ -1,35 +1,28 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "program-input/program-input.h"
 #include "assembler/assembler.h"
 
 int main(int argc, const char * argv[]) {
     struct ProgramInput input = getProgramInput(argc, argv);
 
-    if (input.error) { return 1; }
-
-    if (input.asmFilePath == NULL || input.binaryFilePath == NULL) { return 0; }
-
-    FILE* asmFile = fopen(input.asmFilePath, "r");
+    FILE* asmFile = fopen(input.asmFilePath, "rb");
 
     if (asmFile == NULL) {
         printf("Error: could not read file \"%s\".\n", input.asmFilePath);
-        return 1;
+        exit(1);
     }
 
     unsigned short* programMemory = assemble(asmFile);
 
     fclose(asmFile);
 
-    if (programMemory == NULL) {
-        return 1;
-    }
-
-    FILE* binFile = fopen(input.binaryFilePath, "w");
+    FILE* binFile = fopen(input.binaryFilePath, "wb");
 
     if (binFile == NULL) {
         printf("Error: could not write to file \"%s\".\n", input.binaryFilePath);
-        return 1;
+        exit(1);
     }
 
     int programSize = 0;
@@ -42,7 +35,7 @@ int main(int argc, const char * argv[]) {
 
     if (programSize == 0) {
         printf("Error: the resulting program is empty.\n");
-        return 1;
+        exit(1);
     }
 
     fwrite(programMemory, sizeof(unsigned short), programSize, binFile);

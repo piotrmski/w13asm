@@ -29,13 +29,12 @@ static int hexDigitToNumber(char ch) {
         : 10 + uc(ch) - 'A';
 }
 
-static bool validateNumberInRange(struct Token* token) {
+static void validateNumberInRange(struct Token* token) {
     if (token->numberValue < SHRT_MIN ||
         token->numberValue > USHRT_MAX) {
         printf("Error on line %d: number out of range.\n", token->lineNumber);
-        return false;
+        exit(1);
     }
-    return true;
 }
 
 static bool submitToken(struct Token* token, struct TokenizerState* state) {
@@ -46,11 +45,7 @@ static bool submitToken(struct Token* token, struct TokenizerState* state) {
     return true;
 }
 
-static bool submitError(struct Token* token) {
-    token->type = TokenTypeError;
-    return true;
-}
-
+// Returns true if an entire token was parsed, or false if another character needs to be parsed
 static bool parseChar(struct Token* token, struct TokenizerState* state, int ch) {
     if (ch == '\n') {
         ++token->lineNumber;
@@ -84,7 +79,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 state->stringValueIndex = 0;
             } else if (!isspace(ch)) {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case _TokenTypeComment:
@@ -96,7 +91,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
             if (ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9') {
                 if (state->stringValueIndex + 1 >= MAX_NAME_LEN_INCL_0) {
                     printf("Error on line %d: label name too long.\n", token->lineNumber);
-                    return submitError(token);
+                    exit(1);
                 } else {
                     state->stringValue[state->stringValueIndex++] = ch;
                 }
@@ -107,7 +102,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 return submitToken(token, state);
             } else {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case TokenTypeDirective:
@@ -117,7 +112,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 return submitToken(token, state);
             } else {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case TokenTypeDecimalNumber:
@@ -127,12 +122,12 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 int sign = token->numberValue >= 0 ? 1 : -1;
                 token->numberValue *= 10;
                 token->numberValue += sign * newDigit;
-                if (!validateNumberInRange(token)) { return submitError(token); }
+                validateNumberInRange(token);
             } else if (isspace(ch)) {
                 return submitToken(token, state);
             } else {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case _TokenTypeMinus:
@@ -142,7 +137,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 token->numberValue = -newDigit;
             } else {
                 printf("Error on line %d: invalid use of '-'.\n", token->lineNumber);
-                return submitError(token);
+                exit(1);
             }
             break;
         case _TokenTypeZero:
@@ -161,7 +156,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 return submitToken(token, state);
             } else {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case TokenTypeHexNumber:
@@ -169,17 +164,17 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 state->stringValue[state->stringValueIndex++] = ch;
                 token->numberValue *= 0x10;
                 token->numberValue += hexDigitToNumber(ch);
-                if (!validateNumberInRange(token)) { return submitError(token); }
+                validateNumberInRange(token);
             } else if (isspace(ch)) {
                 if (state->stringValueIndex == 2) {
                     printf("Error on line %d: number without digits.\n", token->lineNumber);
-                    return submitError(token);
+                    exit(1);
                 } else {
                     return submitToken(token, state);
                 }
             } else {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case TokenTypeOctalNumber:
@@ -187,12 +182,12 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 state->stringValue[state->stringValueIndex++] = ch;
                 token->numberValue *= 010;
                 token->numberValue += ch - '0';
-                if (!validateNumberInRange(token)) { return submitError(token); }
+                validateNumberInRange(token);
             } else if (isspace(ch)) {
                 return submitToken(token, state);
             } else {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case TokenTypeBinaryNumber:
@@ -200,30 +195,30 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                 state->stringValue[state->stringValueIndex++] = ch;
                 token->numberValue *= 0b10;
                 token->numberValue += ch - '0';
-                if (!validateNumberInRange(token)) { return submitError(token); }
+                validateNumberInRange(token);
             } else if (isspace(ch)) {
                 if (state->stringValueIndex == 2) {
                     printf("Error on line %d: number without digits.\n", token->lineNumber);
-                    return submitError(token);
+                    exit(1);
                 } else {
                     return submitToken(token, state);
                 }
             } else {
                 printf("Error on line %d: unexpected character '%c'.\n", token->lineNumber, ch);
-                return submitError(token);
+                exit(1);
             }
             break;
         case TokenTypeZTString:
         case TokenTypeNZTString:
             if (state->stringValueIndex == MAX_STR_VAL_LEN_INCL_0 - 1) {
                 printf("Error on line %d: string too long.\n", token->lineNumber);
-                return submitError(token);
+                exit(1);
             } else if (state->isHexEscapeSequence) {
                 if (state->hexEscapeSequenceChar1 == 0) {
                     state->hexEscapeSequenceChar1 = ch;
                 } else if (!isHexDigit(state->hexEscapeSequenceChar1) || !isHexDigit(ch)) {
                     printf("Error on line %d: invalid escape sequence '\\x%c%c'.\n", token->lineNumber, state->hexEscapeSequenceChar1, ch);
-                    return submitError(token);
+                    exit(1);
                 } else {
                     char escapeSequenceChar = 0x10 * hexDigitToNumber(state->hexEscapeSequenceChar1) + hexDigitToNumber(ch);
                     state->stringValue[state->stringValueIndex++] = escapeSequenceChar;
@@ -245,7 +240,7 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
                     state->stringValue[state->stringValueIndex++] = '\r';
                 } else {
                     printf("Error on line %d: invalid escape sequence '\\%c'.\n", token->lineNumber, ch);
-                    return submitError(token);
+                    exit(1);
                 }
             } else if (ch == '\\') {
                 state->isEscapeSequence = true;
@@ -263,8 +258,6 @@ static bool parseChar(struct Token* token, struct TokenizerState* state, int ch)
 }
 
 static void validateEof(struct Token* token, struct TokenizerState* state) {
-    if (token->type == TokenTypeError) { return; }
-
     if (token->type == _TokenTypeComment) {
         token->type = TokenTypeNone;
     }
@@ -274,26 +267,24 @@ static void validateEof(struct Token* token, struct TokenizerState* state) {
     }
 
     if (token->type == _TokenTypeMinus) {
-        token->type = TokenTypeError;
         printf("Error on line %d: invalid use of '-'.\n", token->lineNumber);
+        exit(1);
     }
 
     if ((token->type == TokenTypeBinaryNumber
         || token->type == TokenTypeHexNumber)
         && state->stringValueIndex == 2) {
-        token->type = TokenTypeError;
         printf("Error on line %d: number without digits.\n", token->lineNumber);
+        exit(1);
     }
 
     if (token->type == TokenTypeZTString
         || token->type == TokenTypeNZTString) {
-        token->type = TokenTypeError;
         printf("Error on line %d: unterminated string literal.\n", token->lineNumber);
+        exit(1);
     }
 
-    if (token->type != TokenTypeError) {
-        submitToken(token, state);
-    }
+    submitToken(token, state);
 }
 
 struct Token getInitialTokenState() {

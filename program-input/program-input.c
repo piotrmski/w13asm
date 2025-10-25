@@ -2,15 +2,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 struct ProgramInput getProgramInput(int argc, const char * argv[]) {
-    struct ProgramInput errorResult = {
-        true,
-        NULL,
-        NULL,
-        NULL
-    };
-
     const char* asmFilePath = NULL;
     const char* binaryFilePath = NULL;
     const char* symbolsFilePath = NULL;
@@ -22,13 +16,13 @@ struct ProgramInput getProgramInput(int argc, const char * argv[]) {
             if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
                 if (helpFlag) {
                     printf("Error: help flag was used more than once.\n");
-                    return errorResult;
+                    exit(1);
                 } else {
                     helpFlag = true;
                 }
             } else {
                 printf("Error: unknown flag \"%s\".\n", argv[i]);
-                return errorResult;
+                exit(1);
             }
         } else {
             if (i == 1) {
@@ -39,7 +33,7 @@ struct ProgramInput getProgramInput(int argc, const char * argv[]) {
                 symbolsFilePath = argv[i];
             } else {
                 printf("Error: too many arguments.\n");
-                return errorResult;
+                exit(1);
             }
         }
     }
@@ -52,11 +46,11 @@ struct ProgramInput getProgramInput(int argc, const char * argv[]) {
         printf("Symbols destination path is optional.\n");
         printf("Flags:\n");
         printf("-h or --help - prints this message.\n");
-        return (struct ProgramInput) { false, NULL, NULL, NULL };
+        exit(0);
     } else if (binaryFilePath == NULL) {
         printf("Error: destination file path was not provided.\n");
-        return errorResult;
+        exit(1);
     }
 
-    return (struct ProgramInput) { false, asmFilePath, binaryFilePath, symbolsFilePath };
+    return (struct ProgramInput) { asmFilePath, binaryFilePath, symbolsFilePath };
 }

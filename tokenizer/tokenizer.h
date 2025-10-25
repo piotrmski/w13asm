@@ -18,7 +18,6 @@ enum TokenType {
     TokenTypeBinaryNumber,
     TokenTypeZTString,
     TokenTypeNZTString,
-    TokenTypeError,
     _TokenTypeComment,
     _TokenTypeMinus,
     _TokenTypeZero

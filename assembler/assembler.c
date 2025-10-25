@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define ADDRESS_SPACE_SIZE 0x2000
 #define MAX_LABELS 0x800
@@ -42,18 +43,16 @@ struct AssemblerState {
     int labelUsesIndex;
 };
 
-static bool isMemoryViolation(struct AssemblerState* state, struct Token* token) {
+static void checkForMemoryViolation(struct AssemblerState* state, struct Token* token) {
     if (state->address >= PROGRAM_MEMORY_SIZE) {
         printf("Error on line %d: attempting to declare memory value outside of memory space.\n", token->lineNumber);
-        return true;
+        exit(1);
     }
 
     if (state->programMemoryWritten[state->address]) {
         printf("Error on line %d: attempting to override memory value.\n", token->lineNumber);
-        return true;
+        exit(1);
     }
-
-    return false;
 }
 
 static char uc(char ch) {
@@ -93,15 +92,14 @@ static enum Directive getDirective(char* name) {
     }
 }
 
-// Returns true if an error occurs
-static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* filePtr) {
+static void parseToken(struct Token* token, struct AssemblerState* state, FILE* filePtr) {
     switch (token->type) {
         case TokenTypeNone:
-            return false;
+            break;
         case TokenTypeLabelDefinition:
             if (state->labelDefinitionsIndex >= MAX_LABELS) {
                 printf("Error on line %d: too many labels.\n", token->lineNumber);
-                return true;
+                exit(1);
             }
             state->labelDefinitions[state->labelDefinitionsIndex].name = token->stringValue;
             state->labelDefinitions[state->labelDefinitionsIndex].lineNumber = token->lineNumber;
@@ -112,9 +110,9 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
             enum Instruction instruction = getInstruction(token->stringValue);
             if (instruction == InstructionInvalid) {
                 printf("Error on line %d: invalid instruction \"%s\".\n", token->lineNumber, token->stringValue);
-                return true;
+                exit(1);
             } else {
-                if (isMemoryViolation(state, token)) { return true; }
+                checkForMemoryViolation(state, token);
                 state->programMemory[state->address] = (char)instruction << 13;
                 state->programMemoryWritten[state->address] = true;
                 getToken(token, filePtr);
@@ -125,14 +123,14 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                     case TokenTypeBinaryNumber:
                         if (token->numberValue < 0 || token->numberValue >= ADDRESS_SPACE_SIZE) {
                             printf("Error on line %d: attempting to reference invalid address \"%d\".\n", token->lineNumber, token->numberValue);
-                            return true;
+                            exit(1);
                         }
                         state->programMemory[state->address] |= token->numberValue;
                         break;
                     case TokenTypeLabelUseOrInstruction:
                         if (state->labelUsesIndex >= MAX_LABELS) {
                             printf("Error on line %d: too many labels.\n", token->lineNumber);
-                            return true;
+                            exit(1);
                         }
                         state->labelUses[state->labelUsesIndex].name = token->stringValue;
                         state->labelUses[state->labelUsesIndex].lineNumber = token->lineNumber;
@@ -140,7 +138,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                         break;
                     default:
                         printf("Error on line %d: unexpected token following instruction name.\n", token->lineNumber);
-                        return true;
+                        exit(1);
                 }
                 ++state->address;
             }
@@ -158,7 +156,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                         case TokenTypeBinaryNumber:
                             if (token->numberValue < 0 || token->numberValue >= ADDRESS_SPACE_SIZE) {
                                 printf("Error on line %d: attempting to set origin to invalid address \"%d\".\n", token->lineNumber, token->numberValue);
-                                return true;
+                                exit(1);
                             }
                             state->address = token->numberValue;
                             if (state->lastTokenWasLabelDefinition) {
@@ -167,7 +165,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                             break;
                         default:
                             printf("Error on line %d: unexpected token following .ORG.\n", token->lineNumber);
-                            return true;
+                            exit(1);
                     }
                     break;
                 case DirectiveFill:
@@ -184,13 +182,13 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                         case TokenTypeNZTString:
                             if (token->stringValue[0] == 0 || token->stringValue[1] != 0) {
                                 printf("Error on line %d: expected no more or less than one character.\n", token->lineNumber);
-                                return true;
+                                exit(1);
                             }
                             valueToFill = token->stringValue[0];
                             break;
                         default:
                             printf("Error on line %d: unexpected token following .FILL.\n", token->lineNumber);
-                            return true;
+                            exit(1);
                     }
                     getToken(token, filePtr);
                     switch (token->type) {
@@ -200,23 +198,23 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                         case TokenTypeBinaryNumber:
                             if (token->numberValue < 1) {
                                 printf("Error on line %d: fill count must be positive.\n", token->lineNumber);
-                                return true;
+                                exit(1);
                             }
                             fillCount = token->numberValue;
                             break;
                         default:
                             printf("Error on line %d: unexpected token following .FILL value.\n", token->lineNumber);
-                            return true;
+                            exit(1);
                     }
                     for (int i = 0; i < fillCount; ++i) {
-                        if (isMemoryViolation(state, token)) { return true; }
+                        checkForMemoryViolation(state, token);
                         state->programMemory[state->address] = valueToFill;
                         state->programMemoryWritten[state->address++] = true;
                     }
                     break;
                 default:
                     printf("Error on line %d: invalid directive \"%s\".\n", token->lineNumber, token->stringValue);
-                    return true;
+                    exit(1);
             }
             state->lastTokenWasLabelDefinition = false;
             break;
@@ -224,7 +222,7 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
         case TokenTypeHexNumber:
         case TokenTypeOctalNumber:
         case TokenTypeBinaryNumber:
-            if (isMemoryViolation(state, token)) { return true; }
+            checkForMemoryViolation(state, token);
             state->programMemory[state->address] = token->numberValue;
             state->programMemoryWritten[state->address++] = true;
             state->lastTokenWasLabelDefinition = false;
@@ -233,13 +231,13 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
         case TokenTypeNZTString:
             char* strptr = token->stringValue;
             while(*strptr != 0) {
-                if (isMemoryViolation(state, token)) { return true; }
+                checkForMemoryViolation(state, token);
                 state->programMemory[state->address] = *strptr;
                 state->programMemoryWritten[state->address++] = true;
                 ++strptr;
             }
             if (token->type == TokenTypeZTString) {
-                if (isMemoryViolation(state, token)) { return true; }
+                checkForMemoryViolation(state, token);
                 state->programMemory[state->address] = 0;
                 state->programMemoryWritten[state->address++] = true;
             }
@@ -247,20 +245,19 @@ static bool parseToken(struct Token* token, struct AssemblerState* state, FILE* 
             break;
         default:
             printf("Error on line %d: invalid token \"%s\".\n", token->lineNumber, token->stringValue);
-            return true;
+            exit(1);
     }
-
-    return false;
 }
 
-struct LabelInfo* findLabelDefinition(struct AssemblerState* state, char* labelName) {
+struct LabelInfo* findLabelDefinition(struct AssemblerState* state, struct LabelInfo* labelUse) {
     for (int i = 0; i < state->labelDefinitionsIndex; ++i) {
-        if (strcmp(state->labelDefinitions[i].name, labelName) == 0) {
+        if (strcmp(state->labelDefinitions[i].name, labelUse->name) == 0) {
             return &state->labelDefinitions[i];
         }
     }
 
-    return NULL;
+    printf("Error on line %d: label \"%s\" is undefined.\n", labelUse->lineNumber, labelUse->name);
+    exit(1);
 }
 
 unsigned short* assemble(FILE* filePtr) {
@@ -270,20 +267,16 @@ unsigned short* assemble(FILE* filePtr) {
 
     do {
         getToken(&token, filePtr);
-        if (parseToken(&token, &state, filePtr)) { return NULL; }
-    } while (token.type != TokenTypeNone && token.type != TokenTypeError);
+        parseToken(&token, &state, filePtr);
+    } while (token.type != TokenTypeNone);
 
     if (state.lastTokenWasLabelDefinition) {
         printf("Error on line %d: unexpected label definition at the end of the file.\n", token.lineNumber);
-        return NULL;
+        exit(1);
     }
 
     for (int labelUsesIndex = 0; labelUsesIndex < state.labelUsesIndex; ++labelUsesIndex) {
-        struct LabelInfo* labelDefinition = findLabelDefinition(&state, state.labelUses[labelUsesIndex].name);
-        if (labelDefinition == NULL) {
-            printf("Error on line %d: label \"%s\" is undefined.\n", state.labelUses[labelUsesIndex].lineNumber, state.labelUses[labelUsesIndex].name);
-            return NULL;
-        }
+        struct LabelInfo* labelDefinition = findLabelDefinition(&state, &state.labelUses[labelUsesIndex]);
         state.programMemory[state.labelUses[labelUsesIndex].address] |= labelDefinition->address;
     }
 

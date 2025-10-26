@@ -4,9 +4,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../common/exit-code.h"
+#include "../../common/exit-code.h"
 
-#define ADDRESS_SPACE_SIZE 0x2000
 #define MAX_LABELS 0x800
 
 enum Instruction {
@@ -35,7 +34,6 @@ struct LabelInfo {
 
 struct AssemblerState {
     int address;
-    unsigned short programMemory[PROGRAM_MEMORY_SIZE];
     bool programMemoryWritten[PROGRAM_MEMORY_SIZE];
     bool lastTokenWasLabelDefinition;
     struct LabelInfo labelDefinitions[MAX_LABELS];
@@ -93,7 +91,7 @@ static enum Directive getDirective(char* name) {
     }
 }
 
-static void parseToken(struct Token* token, struct AssemblerState* state, FILE* filePtr) {
+static void parseToken(struct Token* token, struct AssemblerState* state, struct AssemblerResult* result, FILE* filePtr) {
     switch (token->type) {
         case TokenTypeNone:
             break;
@@ -114,7 +112,8 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                 exit(ExitCodeInvalidInstruction);
             } else {
                 checkForMemoryViolation(state, token);
-                state->programMemory[state->address] = (char)instruction << 13;
+                result->programMemory[state->address] = (char)instruction << 13;
+                result->dataType[state->address] = DataTypeInstruction;
                 state->programMemoryWritten[state->address] = true;
                 getToken(token, filePtr);
                 switch (token->type) {
@@ -126,7 +125,7 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                             printf("Error on line %d: attempting to reference invalid address \"%d\".\n", token->lineNumber, token->numberValue);
                             exit(ExitCodeReferenceToInvalidAddress);
                         }
-                        state->programMemory[state->address] |= token->numberValue;
+                        result->programMemory[state->address] |= token->numberValue;
                         break;
                     case TokenTypeLabelUseOrInstruction:
                         if (state->labelUsesIndex >= MAX_LABELS) {
@@ -172,6 +171,7 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                 case DirectiveFill:
                     unsigned short valueToFill;
                     unsigned short fillCount;
+                    enum DataType valueToFillType;
                     getToken(token, filePtr);
                     switch (token->type) {
                         case TokenTypeDecimalNumber:
@@ -179,6 +179,7 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                         case TokenTypeOctalNumber:
                         case TokenTypeBinaryNumber:
                             valueToFill = token->numberValue;
+                            valueToFillType = DataTypeInt;
                             break;
                         case TokenTypeNZTString:
                             if (token->stringValue[0] == 0 || token->stringValue[1] != 0) {
@@ -186,6 +187,7 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                                 exit(ExitCodeFillValueStringNotAChar);
                             }
                             valueToFill = token->stringValue[0];
+                            valueToFillType = DataTypeChar;
                             break;
                         default:
                             printf("Error on line %d: unexpected token following .FILL.\n", token->lineNumber);
@@ -209,7 +211,8 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
                     }
                     for (int i = 0; i < fillCount; ++i) {
                         checkForMemoryViolation(state, token);
-                        state->programMemory[state->address] = valueToFill;
+                        result->programMemory[state->address] = valueToFill;
+                        result->dataType[state->address] = valueToFillType;
                         state->programMemoryWritten[state->address++] = true;
                     }
                     break;
@@ -224,7 +227,8 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
         case TokenTypeOctalNumber:
         case TokenTypeBinaryNumber:
             checkForMemoryViolation(state, token);
-            state->programMemory[state->address] = token->numberValue;
+            result->programMemory[state->address] = token->numberValue;
+            result->dataType[state->address] = DataTypeInt;
             state->programMemoryWritten[state->address++] = true;
             state->lastTokenWasLabelDefinition = false;
             break;
@@ -233,13 +237,15 @@ static void parseToken(struct Token* token, struct AssemblerState* state, FILE* 
             char* strptr = token->stringValue;
             while(*strptr != 0) {
                 checkForMemoryViolation(state, token);
-                state->programMemory[state->address] = *strptr;
+                result->programMemory[state->address] = *strptr;
+                result->dataType[state->address] = DataTypeChar;
                 state->programMemoryWritten[state->address++] = true;
                 ++strptr;
             }
             if (token->type == TokenTypeZTString) {
                 checkForMemoryViolation(state, token);
-                state->programMemory[state->address] = 0;
+                result->programMemory[state->address] = 0;
+                result->dataType[state->address] = DataTypeChar;
                 state->programMemoryWritten[state->address++] = true;
             }
             state->lastTokenWasLabelDefinition = false;
@@ -261,14 +267,15 @@ struct LabelInfo* findLabelDefinition(struct AssemblerState* state, struct Label
     exit(ExitCodeUndefinedLabel);
 }
 
-unsigned short* assemble(FILE* filePtr) {
+struct AssemblerResult assemble(FILE* filePtr) {
     struct Token token = getInitialTokenState();
 
-    struct AssemblerState state = { 0, { 0 }, { false }, false, { { NULL, 0 } }, 0, { { NULL, 0 } }, 0 };
+    struct AssemblerState state = { 0, { false }, false, { { NULL, 0 } }, 0, { { NULL, 0 } }, 0 };
+    struct AssemblerResult result = { { 0 }, { DataTypeNone }, { NULL } };
 
     do {
         getToken(&token, filePtr);
-        parseToken(&token, &state, filePtr);
+        parseToken(&token, &state, &result, filePtr);
     } while (token.type != TokenTypeNone);
 
     if (state.lastTokenWasLabelDefinition) {
@@ -278,8 +285,12 @@ unsigned short* assemble(FILE* filePtr) {
 
     for (int labelUsesIndex = 0; labelUsesIndex < state.labelUsesIndex; ++labelUsesIndex) {
         struct LabelInfo* labelDefinition = findLabelDefinition(&state, &state.labelUses[labelUsesIndex]);
-        state.programMemory[state.labelUses[labelUsesIndex].address] |= labelDefinition->address;
+        result.programMemory[state.labelUses[labelUsesIndex].address] |= labelDefinition->address;
     }
 
-    return state.programMemory; // TODO should not return the address of a local variable
+    for (int labelDefinitionIndex = state.labelDefinitionsIndex - 1; labelDefinitionIndex >= 0; --labelDefinitionIndex) {
+        result.labelNameByAddress[state.labelDefinitions[labelDefinitionIndex].address] = state.labelDefinitions[labelDefinitionIndex].name;
+    }
+
+    return result;
 }

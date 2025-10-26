@@ -5,6 +5,7 @@ enum ExitCode {
     ExitCodeSuccess = 0,
     ExitCodeCouldNotReadAsmFile,
     ExitCodeCouldNotWriteBinFile,
+    ExitCodeCouldNotWriteSymbolsFile,
     ExitCodeResultProgramEmpty,
     ExitCodeProgramArgumentsInvalid,
     ExitCodeNumberLiteralOutOutRange,

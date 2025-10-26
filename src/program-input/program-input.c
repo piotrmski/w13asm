@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../common/exit-code.h"
+#include "../../common/exit-code.h"
 
 struct ProgramInput getProgramInput(int argc, const char * argv[]) {
     const char* asmFilePath = NULL;

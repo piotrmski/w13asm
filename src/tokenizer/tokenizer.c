@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <stdbool.h>
-#include "../common/exit-code.h"
+#include "../../common/exit-code.h"
 
 struct TokenizerState {
     char stringValue[MAX_NAME_LEN_INCL_0];
@@ -40,9 +40,9 @@ static void validateNumberInRange(struct Token* token) {
 
 static bool submitToken(struct Token* token, struct TokenizerState* state) {
     state->stringValue[state->stringValueIndex] = 0;
-    int length = strlen(state->stringValue);
-    token->stringValue = malloc(length + 1);
-    memcpy(token->stringValue, state->stringValue, length + 1);
+    int fullLength = state->stringValueIndex + 1;
+    token->stringValue = malloc(fullLength);
+    memcpy(token->stringValue, state->stringValue, fullLength);
     return true;
 }
 

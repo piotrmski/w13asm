@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "program-input/program-input.h"
 #include "assembler/assembler.h"
+#include "common/exit-code.h"
 
 int main(int argc, const char * argv[]) {
     struct ProgramInput input = getProgramInput(argc, argv);
@@ -11,7 +12,7 @@ int main(int argc, const char * argv[]) {
 
     if (asmFile == NULL) {
         printf("Error: could not read file \"%s\".\n", input.asmFilePath);
-        exit(1);
+        exit(ExitCodeCouldNotReadAsmFile);
     }
 
     unsigned short* programMemory = assemble(asmFile);
@@ -22,7 +23,7 @@ int main(int argc, const char * argv[]) {
 
     if (binFile == NULL) {
         printf("Error: could not write to file \"%s\".\n", input.binaryFilePath);
-        exit(1);
+        exit(ExitCodeCouldNotWriteBinFile);
     }
 
     int programSize = 0;
@@ -35,7 +36,7 @@ int main(int argc, const char * argv[]) {
 
     if (programSize == 0) {
         printf("Error: the resulting program is empty.\n");
-        exit(1);
+        exit(ExitCodeResultProgramEmpty);
     }
 
     fwrite(programMemory, sizeof(unsigned short), programSize, binFile);
@@ -44,5 +45,5 @@ int main(int argc, const char * argv[]) {
 
     // TODO create the symbols file
 
-    return 0;
+    return ExitCodeSuccess;
 }

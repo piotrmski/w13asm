@@ -124,7 +124,6 @@ static void parseToken(struct Token* token, struct AssemblerState* state, struct
                 checkForMemoryViolation(state, token, state->address + 1);
                 unsigned short opcode = (char)instruction << 13;
                 result->dataType[state->address] = DataTypeInstruction;
-                result->dataType[state->address + 1] = DataTypeInstruction;
                 state->programMemoryWritten[state->address] = true;
                 state->programMemoryWritten[state->address + 1] = true;
                 getToken(token, filePtr);

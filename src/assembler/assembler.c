@@ -23,6 +23,7 @@ enum Instruction {
 
 enum Directive {
     DirectiveOrg,
+    DirectiveAlign,
     DirectiveFill,
     DirectiveInvalid
 };
@@ -63,27 +64,39 @@ static void assertNumberLiteralInRange(struct Token* token) {
     }
 }
 
-static char uc(char ch) {
+static char charUppercase(char ch) {
     if (ch >= 'a' && ch <= 'z') return ch - 0x20;
     else return ch;
 }
 
+static bool stringEqualCaseInsensitive(char* string1, char* string2) {
+    for (int i = 0;; ++i) {
+        if (charUppercase(string1[i]) != charUppercase(string2[i])) {
+            return false;
+        }
+
+        if (string1[i] == 0) {
+            return true;
+        }
+    }
+}
+
 static enum Instruction getInstruction(char* name) {
-    if (uc(name[0]) == 'L' && uc(name[1]) == 'D' && name[2] == 0) {
+    if (stringEqualCaseInsensitive(name, "LD")) {
         return InstructionLd;
-    } else if (uc(name[0]) == 'N' && uc(name[1]) == 'O' && uc(name[2]) == 'T' && name[3] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "NOT")) {
         return InstructionNot;
-    } else if (uc(name[0]) == 'A' && uc(name[1]) == 'D' && uc(name[2]) == 'D' && name[3] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "ADD")) {
         return InstructionAdd;
-    } else if (uc(name[0]) == 'A' && uc(name[1]) == 'N' && uc(name[2]) == 'D' && name[3] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "AND")) {
         return InstructionAnd;
-    } else if (uc(name[0]) == 'S' && uc(name[1]) == 'T' && name[2] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "ST")) {
         return InstructionSt;
-    } else if (uc(name[0]) == 'J' && uc(name[1]) == 'M' && uc(name[2]) == 'P' && name[3] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "JMP")) {
         return InstructionJmp;
-    } else if (uc(name[0]) == 'J' && uc(name[1]) == 'M' && uc(name[2]) == 'N' && name[3] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "JMN")) {
         return InstructionJmn;
-    } else if (uc(name[0]) == 'J' && uc(name[1]) == 'M' && uc(name[2]) == 'Z' && name[3] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "JMZ")) {
         return InstructionJmz;
     } else {
         return InstructionInvalid;
@@ -91,9 +104,11 @@ static enum Instruction getInstruction(char* name) {
 }
 
 static enum Directive getDirective(char* name) {
-    if (uc(name[0]) == 'O' && uc(name[1]) == 'R' && uc(name[2]) == 'G' && name[3] == 0) {
+    if (stringEqualCaseInsensitive(name, "ORG")) {
         return DirectiveOrg;
-    } else if (uc(name[0]) == 'F' && uc(name[1]) == 'I' && uc(name[2]) == 'L' && uc(name[3]) == 'L' && name[4] == 0) {
+    } else if (stringEqualCaseInsensitive(name, "ALIGN")) {
+        return DirectiveAlign;
+    } else if (stringEqualCaseInsensitive(name, "FILL")) {
         return DirectiveFill;
     } else {
         return DirectiveInvalid;
@@ -178,6 +193,33 @@ static void parseToken(struct Token* token, struct AssemblerState* state, struct
                             break;
                         default:
                             printf("Error on line %d: unexpected token following .ORG.\n", token->lineNumber);
+                            exit(ExitCodeUnexpectedTokenAfterOrg);
+                    }
+                    break;
+                case DirectiveAlign:
+                    getToken(token, filePtr);
+                    switch (token->type) {
+                        case TokenTypeDecimalNumber:
+                        case TokenTypeHexNumber:
+                        case TokenTypeOctalNumber:
+                        case TokenTypeBinaryNumber:
+                            if (token->numberValue < 0 || token->numberValue > UCHAR_MAX) {
+                                printf("Error on line %d: attempting to align to an invalid byte \"%d\".\n", token->lineNumber, token->numberValue);
+                                exit(ExitCodeInvalidAlignParameter);
+                            }
+                            state->address = (state->address & 0xff) > token->numberValue
+                                ? (((state->address & 0xff00) + 0x100) | token->numberValue)
+                                : ((state->address & 0xff00) | token->numberValue);
+                            if (state->address >= ADDRESS_SPACE_SIZE) {
+                                printf("Error on line %d: attempting to set origin via align to invalid address \"%d\".\n", token->lineNumber, token->numberValue);
+                                exit(ExitCodeOriginOutOfMemoryRange);
+                            }
+                            if (state->lastTokenWasLabelDefinition) {
+                                state->labelDefinitions[state->labelDefinitionsIndex - 1].address = state->address;
+                            }
+                            break;
+                        default:
+                            printf("Error on line %d: unexpected token following .ALIGN.\n", token->lineNumber);
                             exit(ExitCodeUnexpectedTokenAfterOrg);
                     }
                     break;

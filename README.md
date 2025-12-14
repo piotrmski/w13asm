@@ -64,7 +64,8 @@ Data declarations are not required to be preceded by any directive - a number li
 
 ## Directives
 
-- `.ORG` followed by a number between 0 and 8191 as an argument. Places the following instructions or directives at a specified memory address.
+- `.ORG` followed by a number between 0 and 8191 as an argument. Places the following data, instructions, or directives at a specified memory address.
+- `.ALIGN` followed by a number between 0 and 255 as an argument. Places the following data, instructions, or directives at the nearest (towards higher) address where the least significant byte is equal to the argument.
 - `.FILL` followed by two arguments:
     - value to be filled (a number between -128 and 255 or a character literal),
     - number of words to fill (a number greater than 0).

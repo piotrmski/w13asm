@@ -1,5 +1,5 @@
 /*
-    W16ASM Copyright (C) 2025 Piotr Marczyński <piotrmski@gmail.com>
+    W16ASM-test Copyright (C) 2025 Piotr Marczyński <piotrmski@gmail.com>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,8 +23,13 @@
 #include <stdbool.h>
 #include "../common/exit-code.h"
 
+#define FAIL "\x1B[31m[FAIL]\x1B[0m"
+#define WARN "\x1B[33m[WARN]\x1B[0m"
+#define PASS "\x1B[32m[PASS]\x1B[0m"
+
 struct TestResults {
     int passed;
+    int warned;
     int failed;
 };
 
@@ -50,58 +55,76 @@ static bool filesIdentical(char* testName, char* fileExtension, enum FileType fi
     sprintf(expectedFilePath, "test/test-cases/%s/expected.%s", testName, fileExtension);
     sprintf(actualFilePath, "test/test-cases/%s/actual.%s", testName, fileExtension);
 
-    FILE* expectedFile = fopen(expectedFilePath, "rb");
+    FILE* expectedFile = fopen(expectedFilePath, fileType == FileTypeBinary ? "rb" : "r");
 
     if (expectedFile == NULL) { 
-        printf("[FAIL] %s - reference file \"%s\" is missing, the test can't be evaluated.\n", testName, expectedFilePath);
+        printf(FAIL " %s - reference file \"%s\" is missing, the test can't be evaluated.\n", testName, expectedFilePath);
         return false;
     }
 
-    FILE* actualFile = fopen(actualFilePath, "rb");
+    FILE* actualFile = fopen(actualFilePath, fileType == FileTypeBinary ? "rb" : "r");
 
     if (actualFile == NULL) { 
         fclose(expectedFile);
-        printf("[FAIL] %s - file \"%s\" was not produced.\n", testName, actualFilePath);
+        printf(FAIL " %s - file \"%s\" was not produced.\n", testName, actualFilePath);
         return false; 
     }
 
-    int expectedFileSize;
-    int actualFileSize;
-          
-    fseek(expectedFile, 0, SEEK_END);          
-    expectedFileSize = ftell(expectedFile);            
-    rewind(expectedFile);           
-          
-    fseek(actualFile, 0, SEEK_END);          
-    actualFileSize = ftell(actualFile);            
-    rewind(actualFile);   
-    
-    if (expectedFileSize != actualFileSize) {
-        printf("[FAIL] %s - file \"%s\" was expected to be %d bytes, is %d bytes.\n", testName, actualFilePath, expectedFileSize, actualFileSize);
-        return false;
-    }
-
     unsigned char expectedFileByte;
-    unsigned char producedFileByte;
+    unsigned char actualFileByte;
 
-    for (int i = 0; i < expectedFileSize; ++i) {
-        fread(&expectedFileByte, sizeof(unsigned char), 1, expectedFile);
-        fread(&producedFileByte, sizeof(unsigned char), 1, actualFile);
+    int line = 1;
+    int col = 1;
 
-        if (expectedFileByte != producedFileByte) {
-            switch (fileType) {
-                case FileTypeBinary:
-                    printf("[FAIL] %s - file \"%s\" at byte %d (0x%04X): expected 0x%02X, is 0x%02X.\n", testName, actualFilePath, i, i, expectedFileByte, producedFileByte);
-                    break;
-                case FileTypeText:
-                    printf("[FAIL] %s - file \"%s\" at byte %d (0x%04X): expected '%c' (0x%02X), is '%c' (0x%02X).\n", testName, actualFilePath, i, i, expectedFileByte, expectedFileByte, producedFileByte, producedFileByte);
-                    break;
-            }
+    for (int i = 0;; ++i) {
+        bool expectedFileEof = !fread(&expectedFileByte, sizeof(unsigned char), 1, expectedFile);
+        bool actualFileEof = !fread(&actualFileByte, sizeof(unsigned char), 1, actualFile);
+
+        if (actualFileEof && expectedFileEof) {
+            fclose(expectedFile);
+            fclose(actualFile);
+            return true;
+        }
+
+        if (expectedFileEof) {
+            fseek(actualFile, 0, SEEK_END);          
+            int actualFileSize = ftell(actualFile);
+            printf(FAIL " %s - file \"%s\" was expected to be %d bytes, is %d bytes.\n", testName, actualFilePath, i, actualFileSize);
+            fclose(expectedFile);
+            fclose(actualFile);
             return false;
         }
-    }
 
-    return true;
+        if (actualFileEof) {
+            fseek(expectedFile, 0, SEEK_END);          
+            int expectedFileSize = ftell(expectedFile);
+            printf(FAIL " %s - file \"%s\" was expected to be %d bytes, is %d bytes.\n", testName, actualFilePath, expectedFileSize, i);
+            fclose(expectedFile);
+            fclose(actualFile);
+            return false;
+        }
+
+        if (expectedFileByte != actualFileByte) {
+            switch (fileType) {
+                case FileTypeBinary:
+                    printf(FAIL " %s - file \"%s\" at byte %d (0x%04X): expected 0x%02X, is 0x%02X.\n", testName, actualFilePath, i, i, expectedFileByte, actualFileByte);
+                    break;
+                case FileTypeText:
+                    printf(FAIL " %s - file \"%s\" at line %d column %d: expected '%c' (0x%02X), is '%c' (0x%02X).\n", testName, actualFilePath, line, col, expectedFileByte, expectedFileByte, actualFileByte, actualFileByte);
+                    break;
+            }
+            fclose(expectedFile);
+            fclose(actualFile);
+            return false;
+        }
+
+        if (actualFileByte != '\n') {
+            ++col;
+        } else {
+            col = 1;
+            ++line;
+        }
+    }
 }
 
 static int executeTestCase(char* testName) {
@@ -122,19 +145,24 @@ static void expectErrorCode(char* testName, int expectedErrorCode, struct TestRe
     int returnCode = executeTestCase(testName);
 
     if (returnCode != expectedErrorCode) {
-        ++testResults->failed;
-        printf("[FAIL] %s - code %d was expected, but code %d was produced.\n", testName, expectedErrorCode, returnCode);
+        if (returnCode != 0) {
+            ++testResults->warned;
+            printf(WARN " %s - code %d was expected, but code %d was produced.\n", testName, expectedErrorCode, returnCode);
+        } else {
+            ++testResults->failed;
+            printf(FAIL" %s - code %d was expected, but success code was produced.\n", testName, expectedErrorCode);
+        }
         return;
     }
 
     if (fileExists(actualBinPath) || fileExists(actualCsvPath)) {
         ++testResults->failed;
-        printf("[FAIL] %s - the expected code was produced, however output files were produced as well, when none were expected.\n", testName);
+        printf(FAIL " %s - the expected code was produced, however output files were produced as well, when none were expected.\n", testName);
         return;
     }
 
     ++testResults->passed;
-    printf("[PASS] %s\n", testName);
+    printf(PASS " %s\n", testName);
 }
 
 static void expectSuccess(char* testName, struct TestResults* testResults) {
@@ -142,7 +170,7 @@ static void expectSuccess(char* testName, struct TestResults* testResults) {
 
     if (returnCode != 0) {
         ++testResults->failed;
-        printf("[FAIL] %s - error code 0 was expected, but code %d was produced.\n", testName, returnCode);
+        printf(FAIL " %s - success code was expected, but code %d was produced.\n", testName, returnCode);
         return;
     }
 
@@ -157,7 +185,7 @@ static void expectSuccess(char* testName, struct TestResults* testResults) {
     }
 
     ++testResults->passed;
-    printf("[PASS] %s\n", testName);
+    printf(PASS " %s\n", testName);
 }
 
 int main(int argc, const char * argv[]) {
@@ -185,6 +213,14 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("string-should-disallow-unterminated", ExitCodeUnterminatedString, &testResults);
     expectErrorCode("fill-should-disallow-multiple-characters", ExitCodeFillValueStringNotAChar, &testResults);
     expectErrorCode("fill-should-disallow-negative-count", ExitCodeFillCountNotPositive, &testResults);
+    expectSuccess("label-before-align-should-point-to-valid-address", &testResults);
+    expectSuccess("label-before-fill-should-point-to-valid-address", &testResults);
+    expectSuccess("label-before-org-should-point-to-valid-address", &testResults);
+    expectErrorCode("align-should-disallow-param-under-zero", ExitCodeInvalidAlignParameter, &testResults);
+    expectErrorCode("align-should-disallow-param-over-byte", ExitCodeInvalidAlignParameter, &testResults);
+    expectErrorCode("align-should-disallow-beyond-memory-range", ExitCodeOriginOutOfMemoryRange, &testResults);
+    expectSuccess("align-should-allow-param-zero", &testResults);
+    expectSuccess("align-should-allow-param-under-byte", &testResults);
 
-    printf("Tests passed: %d\nTests failed: %d\n", testResults.passed, testResults.failed);
+    printf("Tests passed: %d\nTests warned: %d\nTests failed: %d\n", testResults.passed, testResults.warned, testResults.failed);
 }

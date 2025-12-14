@@ -11,5 +11,5 @@ jmp loop            ; Loop to character loading
 END: jmp END        ; End of program    
 
 const1: 1
-text: "Hello, world!"
+text: .align 0 "Hello, world!"
 IO: .org 0x1fff

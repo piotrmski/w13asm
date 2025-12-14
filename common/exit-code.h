@@ -24,6 +24,7 @@ enum ExitCode {
     ExitCodeUnexpectedTokenAfterInstruction,
     ExitCodeOriginOutOfMemoryRange,
     ExitCodeUnexpectedTokenAfterOrg,
+    ExitCodeInvalidAlignParameter,
     ExitCodeFillValueStringNotAChar,
     ExitCodeUnexpectedTokenAfterFill,
     ExitCodeFillCountNotPositive,

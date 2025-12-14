@@ -22,7 +22,7 @@ Run `w16asm path/to/source.asm path/to/result.bin path/to/symbols.csv` to do the
 
 W16 is an imaginary microarchitecture and ISA designed with extreme minimalism in mind. Full details can be found at [https://github.com/piotrmski/w16sim](https://github.com/piotrmski/w16sim).
 
-The word size is 8 bits. 2<sup>13</sup> memory addresses are addressable. One general purpose register is available. Bit and byte order are little-endian.
+The word size is 8 bits. 2<sup>13</sup> memory addresses are addressable. One general purpose register is available. Byte order is little-endian.
 
 Eight instructions are available, exclusively in absolute addressing mode. All instructions are two words wide and follow the same format:
 

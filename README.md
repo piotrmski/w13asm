@@ -4,7 +4,7 @@ This program is used to process assembly source files into a binary format, whic
 
 ## Building
 
-A C compiler supporting the C23 standard, aliased as `CC` (like `GCC` or `Clang`) and `make` are required to build this assembler from source.
+A C compiler supporting the C23 standard, aliased as `CC` (such as `GCC` or `Clang`) and `make` are required to build this assembler from source.
 
 Run `make` to build the assembler. The `w16asm` executable will be produced in the `dist` directory.
 
@@ -12,19 +12,19 @@ Run `make` to build the assembler. The `w16asm` executable will be produced in t
 
 Run `w16asm path/to/source.asm path/to/result.bin` to assemble the `source.asm` assembly file and save the resulting binary to `result.bin`.
 
-Run `w16asm path/to/source.asm path/to/result.bin path/to/symbols.csv` to do the same as before, and additionally produce a `symbols.csv` comma-separated file with descriptions of memory addresses:
+Run `w16asm path/to/source.asm path/to/result.bin path/to/symbols.csv` to do the same as before, and additionally produce a `symbols.csv` comma-separated file containing descriptions of memory addresses:
 
 - the first column is the memory address in hexadecimal format,
 - the second column is `int`, `char` or `instruction`,
-- the third column is the label name describing given address (or the first label name, in case multiple labels describe given address).
+- the third column is the label name describing the given address (or the first label name, in case multiple labels describe the same address).
 
 ## Characteristics of W16
 
 W16 is an imaginary microarchitecture and ISA designed with extreme minimalism in mind. Full details can be found at [https://github.com/piotrmski/w16sim](https://github.com/piotrmski/w16sim).
 
-The word size is 8 bits. 2^13 memory addresses are addressable. One general purpose register is available. Bit and byte order are little endian.
+The word size is 8 bits. 2<sup>13</sup> memory addresses are addressable. One general purpose register is available. Bit and byte order are little-endian.
 
-8 instructions are available, exclusively in absolute addressing mode. All instructions are 2 words wide and follow the same format:
+Eight instructions are available, exclusively in absolute addressing mode. All instructions are two words wide and follow the same format:
 
 - the 3 most significant bits are the opcode,
 - the other 13 bits are the absolute memory address.
@@ -43,9 +43,9 @@ The syntax of this W16 assembly language is very relaxed and mostly newline-agno
 
 Any number of labels may precede an instruction or a directive. A label name must be between 1 and 31 characters, which could be uppercase or lowercase letters, digits and underscores (the first character can’t be a digit). The label name must be followed by a colon `:`. Labels are case-sensitive.
 
-A comment starts with a semicolon `;` and ends with a newline character `CR` or `LF`.
+A comment starts with a semicolon `;` and ends with a newline character (CR or LF).
 
-Instruction names are case-insensitive. All instructions have one argument - an absolute memory address - which may be expressed as a label name, or a number between 0 and 8191 in any representration.
+Instruction names are case-insensitive. All instructions have one argument - an absolute memory address - which may be expressed as a label name or a number between 0 and 8191 in any representation.
 
 Directive names are also case-insensitive.
 
@@ -59,12 +59,12 @@ Data declarations are not required to be preceded by any directive - a number li
 - `AND X` - performs binary operation AND between the value from memory address X and the value from register A, and stores the result in the register A,
 - `ST X` - stores value from the register A to the memory address X,
 - `JMP X` - performs an unconditional jump to X,
-- `JMN X` - if the most significant bit of the value in A register is 1, then performs a  jump to X,
-- `JMZ X` - if the value in A register is 0, then performs a jump to X.
+- `JMN X` - if the most significant bit of the value in register A is 1, then performs a jump to X,
+- `JMZ X` - if the value in register A is 0, then performs a jump to X.
 
 ## Directives
 
-- `.ORG` followed a number between 0 and 8191 as an argument. Places the following instructions or directives at a specified memory address.
+- `.ORG` followed by a number between 0 and 8191 as an argument. Places the following instructions or directives at a specified memory address.
 - `.FILL` followed by two arguments:
     - value to be filled (a number between -128 and 255 or a character literal),
     - number of words to fill (a number greater than 0).
@@ -76,8 +76,8 @@ Data declarations are not required to be preceded by any directive - a number li
     - hexadecimal `/^0x[0-9A-F]+$/` (case-insensitive),
     - binary `/^0b[0-1]+$/` (case-insensitive),
     - octal `/^0[0-7]+$/`,
-- Single characters or non-zero-terminated strings in ' brackets,
-- Zero-terminated strings in " brackets.
+- Single characters or non-zero-terminated strings in single quotes `'`,
+- Zero-terminated strings in double quotes `"`.
 
 Numbers in data declarations are limited to 8 bits.
 
@@ -93,7 +93,7 @@ The following escape sequences can be used in strings and characters (they are c
 
 ## Examples
 
-The `examples` directory contains example assembly files alongside with the produced binary and csv files. Optionally use `assemble-examples.sh` to assemble the .asm files yourself.
+The `examples` directory contains example assembly files alongside the produced binary and CSV files. Optionally use `assemble-examples.sh` to assemble the .asm files yourself.
 
 ## Testing
 
@@ -101,4 +101,4 @@ Run `run-tests.sh` to build and run the test suite.
 
 # License
 
-Copyright (C) 2025 Piotr Marczyński. This program is licensed under GNU GPL v3. See file COPYING.
+Copyright (C) 2025 Piotr Marczyński. This program is licensed under GNU GPL v3. See the file COPYING.

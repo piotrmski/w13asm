@@ -31,7 +31,7 @@ struct TestResults {
     int passed;
     int warned;
     int failed;
-};
+} testResults;
 
 enum FileType {
     FileTypeBinary,
@@ -134,7 +134,7 @@ static int executeTestCase(char* testName) {
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
-static void expectErrorCode(char* testName, int expectedErrorCode, struct TestResults* testResults) {
+static void expectErrorCode(char* testName, int expectedErrorCode) {
     char actualBinPath[1024];
     char actualCsvPath[1024];
     sprintf(actualBinPath, "test/test-cases/%s/actual.bin", testName);
@@ -146,83 +146,82 @@ static void expectErrorCode(char* testName, int expectedErrorCode, struct TestRe
 
     if (returnCode != expectedErrorCode) {
         if (returnCode != 0) {
-            ++testResults->warned;
+            ++testResults.warned;
             printf(WARN " %s - code %d was expected, but code %d was produced.\n", testName, expectedErrorCode, returnCode);
         } else {
-            ++testResults->failed;
+            ++testResults.failed;
             printf(FAIL" %s - code %d was expected, but success code was produced.\n", testName, expectedErrorCode);
         }
         return;
     }
 
     if (fileExists(actualBinPath) || fileExists(actualCsvPath)) {
-        ++testResults->failed;
+        ++testResults.failed;
         printf(FAIL " %s - the expected code was produced, however output files were produced as well, when none were expected.\n", testName);
         return;
     }
 
-    ++testResults->passed;
+    ++testResults.passed;
     printf(PASS " %s\n", testName);
 }
 
-static void expectSuccess(char* testName, struct TestResults* testResults) {
+static void expectSuccess(char* testName) {
     int returnCode = executeTestCase(testName);
 
     if (returnCode != 0) {
-        ++testResults->failed;
+        ++testResults.failed;
         printf(FAIL " %s - success code was expected, but code %d was produced.\n", testName, returnCode);
         return;
     }
 
     if (!filesIdentical(testName, "bin", FileTypeBinary)) {
-        ++testResults->failed;
+        ++testResults.failed;
         return;
     }
 
     if (!filesIdentical(testName, "csv", FileTypeText)) {
-        ++testResults->failed;
+        ++testResults.failed;
         return;
     }
 
-    ++testResults->passed;
+    ++testResults.passed;
     printf(PASS " %s\n", testName);
 }
 
 int main(int argc, const char * argv[]) {
-    struct TestResults testResults = { 0, 0 };
-
-    expectErrorCode("empty-program-should-fail", ExitCodeResultProgramEmpty, &testResults);
-    expectSuccess("validate-basic-functionality", &testResults);
-    expectSuccess("label-name-should-allow-valid-length-and-characters", &testResults);
-    expectErrorCode("label-name-should-disallow-invalid-length", ExitCodeLabelNameTooLong, &testResults);
-    expectErrorCode("label-name-should-disallow-invalid-character", ExitCodeUnexpectedCharacter, &testResults);
-    expectSuccess("declaration-should-allow-near-memory-range", &testResults);
-    expectErrorCode("declaration-should-disallow-beyond-memory-range", ExitCodeDeclaringValueOutOfMemoryRange, &testResults);
-    expectSuccess("instruction-should-allow-near-memory-range", &testResults);
-    expectErrorCode("instruction-should-disallow-beyond-memory-range", ExitCodeDeclaringValueOutOfMemoryRange, &testResults);
-    expectErrorCode("memory-overwrite-should-fail", ExitCodeMemoryValueOverridden, &testResults);
-    expectErrorCode("number-literals-binary-should-disallow-no-digits", ExitCodeNumberWithoutDigits, &testResults);
-    expectErrorCode("number-literals-hex-should-disallow-no-digits", ExitCodeNumberWithoutDigits, &testResults);
-    expectSuccess("number-literals-should-allow-in-range", &testResults);
-    expectErrorCode("number-literals-should-disallow-too-high", ExitCodeNumberLiteralOutOutRange, &testResults);
-    expectErrorCode("number-literals-should-disallow-too-low", ExitCodeNumberLiteralOutOutRange, &testResults);
-    expectErrorCode("origin-should-disallow-address-beyond-memory-range", ExitCodeOriginOutOfMemoryRange, &testResults);
-    expectErrorCode("origin-should-disallow-negative-address", ExitCodeOriginOutOfMemoryRange, &testResults);
-    expectErrorCode("reference-should-disallow-address-beyond-memory-range", ExitCodeReferenceToInvalidAddress, &testResults);
-    expectErrorCode("reference-should-disallow-negative-address", ExitCodeReferenceToInvalidAddress, &testResults);
-    expectErrorCode("string-should-disallow-unterminated", ExitCodeUnterminatedString, &testResults);
-    expectErrorCode("fill-should-disallow-multiple-characters", ExitCodeFillValueStringNotAChar, &testResults);
-    expectErrorCode("fill-should-disallow-negative-count", ExitCodeFillCountNotPositive, &testResults);
-    expectSuccess("label-before-align-should-point-to-valid-address", &testResults);
-    expectSuccess("label-before-fill-should-point-to-valid-address", &testResults);
-    expectSuccess("label-before-org-should-point-to-valid-address", &testResults);
-    expectErrorCode("align-should-disallow-param-under-zero", ExitCodeInvalidAlignParameter, &testResults);
-    expectErrorCode("align-should-disallow-param-over-byte", ExitCodeInvalidAlignParameter, &testResults);
-    expectErrorCode("align-should-disallow-beyond-memory-range", ExitCodeOriginOutOfMemoryRange, &testResults);
-    expectSuccess("align-should-allow-param-zero", &testResults);
-    expectSuccess("align-should-allow-param-under-byte", &testResults);
-    expectSuccess("empty-string-should-produce-char-0", &testResults);
-    expectSuccess("empty-nzt-string-should-be-labeled-as-char", &testResults);
+    expectErrorCode("empty-program-should-fail", ExitCodeResultProgramEmpty);
+    expectSuccess("validate-basic-functionality");
+    expectSuccess("label-name-should-allow-valid-length-and-characters");
+    expectErrorCode("label-name-should-disallow-invalid-length", ExitCodeLabelNameTooLong);
+    expectErrorCode("label-name-should-disallow-invalid-character", ExitCodeUnexpectedCharacter);
+    expectSuccess("declaration-should-allow-near-memory-range");
+    expectErrorCode("declaration-should-disallow-beyond-memory-range", ExitCodeDeclaringValueOutOfMemoryRange);
+    expectSuccess("instruction-should-allow-near-memory-range");
+    expectErrorCode("instruction-should-disallow-beyond-memory-range", ExitCodeDeclaringValueOutOfMemoryRange);
+    expectErrorCode("memory-overwrite-should-fail", ExitCodeMemoryValueOverridden);
+    expectErrorCode("number-literals-binary-should-disallow-no-digits", ExitCodeNumberWithoutDigits);
+    expectErrorCode("number-literals-hex-should-disallow-no-digits", ExitCodeNumberWithoutDigits);
+    expectSuccess("number-literals-should-allow-in-range");
+    expectErrorCode("number-literals-should-disallow-too-high", ExitCodeNumberLiteralOutOutRange);
+    expectErrorCode("number-literals-should-disallow-too-low", ExitCodeNumberLiteralOutOutRange);
+    expectErrorCode("origin-should-disallow-address-beyond-memory-range", ExitCodeOriginOutOfMemoryRange);
+    expectErrorCode("origin-should-disallow-negative-address", ExitCodeOriginOutOfMemoryRange);
+    expectErrorCode("reference-should-disallow-address-beyond-memory-range", ExitCodeReferenceToInvalidAddress);
+    expectErrorCode("reference-should-disallow-negative-address", ExitCodeReferenceToInvalidAddress);
+    expectErrorCode("string-should-disallow-unterminated", ExitCodeUnterminatedString);
+    expectErrorCode("fill-should-disallow-multiple-characters", ExitCodeFillValueStringNotAChar);
+    expectErrorCode("fill-should-disallow-negative-count", ExitCodeFillCountNotPositive);
+    expectSuccess("label-before-align-should-point-to-valid-address");
+    expectSuccess("label-before-fill-should-point-to-valid-address");
+    expectSuccess("label-before-org-should-point-to-valid-address");
+    expectErrorCode("align-should-disallow-param-under-zero", ExitCodeInvalidAlignParameter);
+    expectErrorCode("align-should-disallow-param-over-byte", ExitCodeInvalidAlignParameter);
+    expectErrorCode("align-should-disallow-beyond-memory-range", ExitCodeOriginOutOfMemoryRange);
+    expectSuccess("align-should-allow-param-zero");
+    expectSuccess("align-should-allow-param-under-byte");
+    expectSuccess("empty-string-should-produce-char-0");
+    expectSuccess("empty-nzt-string-should-be-labeled-as-char");
+    expectSuccess("label-at-higher-byte-of-instruction-should-be-int");
 
     printf("Tests passed: %d\nTests warned: %d\nTests failed: %d\n", testResults.passed, testResults.warned, testResults.failed);
 }

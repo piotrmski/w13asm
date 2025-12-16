@@ -69,34 +69,34 @@ static char charUppercase(char ch) {
     else return ch;
 }
 
-static bool stringEqualCaseInsensitive(char* string1, char* string2) {
+static bool stringsEqualCaseInsensitive(char* string1, char* string2) {
     for (int i = 0;; ++i) {
         if (charUppercase(string1[i]) != charUppercase(string2[i])) {
             return false;
         }
 
-        if (string1[i] == 0) {
+        if (string1[i] == 0 || string2[i] == 0) {
             return true;
         }
     }
 }
 
 static enum Instruction getInstruction(char* name) {
-    if (stringEqualCaseInsensitive(name, "LD")) {
+    if (stringsEqualCaseInsensitive(name, "LD")) {
         return InstructionLd;
-    } else if (stringEqualCaseInsensitive(name, "NOT")) {
+    } else if (stringsEqualCaseInsensitive(name, "NOT")) {
         return InstructionNot;
-    } else if (stringEqualCaseInsensitive(name, "ADD")) {
+    } else if (stringsEqualCaseInsensitive(name, "ADD")) {
         return InstructionAdd;
-    } else if (stringEqualCaseInsensitive(name, "AND")) {
+    } else if (stringsEqualCaseInsensitive(name, "AND")) {
         return InstructionAnd;
-    } else if (stringEqualCaseInsensitive(name, "ST")) {
+    } else if (stringsEqualCaseInsensitive(name, "ST")) {
         return InstructionSt;
-    } else if (stringEqualCaseInsensitive(name, "JMP")) {
+    } else if (stringsEqualCaseInsensitive(name, "JMP")) {
         return InstructionJmp;
-    } else if (stringEqualCaseInsensitive(name, "JMN")) {
+    } else if (stringsEqualCaseInsensitive(name, "JMN")) {
         return InstructionJmn;
-    } else if (stringEqualCaseInsensitive(name, "JMZ")) {
+    } else if (stringsEqualCaseInsensitive(name, "JMZ")) {
         return InstructionJmz;
     } else {
         return InstructionInvalid;
@@ -104,11 +104,11 @@ static enum Instruction getInstruction(char* name) {
 }
 
 static enum Directive getDirective(char* name) {
-    if (stringEqualCaseInsensitive(name, "ORG")) {
+    if (stringsEqualCaseInsensitive(name, "ORG")) {
         return DirectiveOrg;
-    } else if (stringEqualCaseInsensitive(name, "ALIGN")) {
+    } else if (stringsEqualCaseInsensitive(name, "ALIGN")) {
         return DirectiveAlign;
-    } else if (stringEqualCaseInsensitive(name, "FILL")) {
+    } else if (stringsEqualCaseInsensitive(name, "FILL")) {
         return DirectiveFill;
     } else {
         return DirectiveInvalid;

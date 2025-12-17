@@ -2,12 +2,6 @@
 
 This program is used to process assembly source files into a binary format, which can later be loaded into the memory of a W16 simulator.
 
-## Building
-
-A C compiler supporting the C23 standard, aliased as `CC` (such as `GCC` or `Clang`) and `make` are required to build this assembler from source.
-
-Run `make` to build the assembler. The `w16asm` executable will be produced in the `dist` directory.
-
 ## Usage
 
 Run `w16asm path/to/source.asm path/to/result.bin` to assemble the `source.asm` assembly file and save the resulting binary to `result.bin`.
@@ -18,11 +12,25 @@ Run `w16asm path/to/source.asm path/to/result.bin path/to/symbols.csv` to do the
 - the second column is `int`, `char` or `instruction`,
 - the third column is the label name describing the given address (or the first label name, in case multiple labels describe the same address).
 
-## Characteristics of W16
+## Building
+
+A C compiler supporting the C23 standard, aliased as `CC` (such as `GCC` or `Clang`) and `make` are required to build this assembler from source.
+
+Run `make` to build the assembler. The `w16asm` executable will be produced in the `dist` directory.
+
+## Testing
+
+Run `run-tests.sh` to build and run the test suite.
+
+# W16 assembly language
 
 W16 is an imaginary microarchitecture and ISA designed with extreme minimalism in mind. Full details can be found at [https://github.com/piotrmski/w16sim](https://github.com/piotrmski/w16sim).
 
-The word size is 8 bits. 2<sup>13</sup> memory addresses are addressable. One general purpose register is available. Byte order is little-endian.
+The word size is 8 bits. 2<sup>13</sup> memory addresses are addressable. Byte order is little-endian.
+
+Two registers exist in this architecture:
+- program counter "PC" containing the address of the currently executed instruction (13 bits),
+- general purpose register "A" (8 bits).
 
 Eight instructions are available, exclusively in absolute addressing mode. All instructions are two words wide and follow the same format:
 
@@ -99,10 +107,6 @@ The following escape sequences can be used in strings and characters (they are c
 ## Examples
 
 The `examples` directory contains example assembly files alongside the produced binary and CSV files. Optionally use `assemble-examples.sh` to assemble the .asm files yourself.
-
-## Testing
-
-Run `run-tests.sh` to build and run the test suite.
 
 # License
 

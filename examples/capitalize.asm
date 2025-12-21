@@ -1,3 +1,5 @@
+; This program takes characters from terminal input and echoes them back capitalized until Return is pressed.
+
 loop:
 ld IO
 st character
@@ -5,7 +7,7 @@ jmz loop
 
 ; if character == '\n' (10) then end
 add constNegativeLF
-jmz end
+jmz onReturn
 add constLF
 
 ; if not character < 'a' (97) and character < 'z'+1 (123) then print character - 32; else print character
@@ -27,6 +29,10 @@ ld character
 add constNegative32
 st IO
 jmp loop
+
+onReturn:
+ld character
+st IO
 
 end: jmp end
 

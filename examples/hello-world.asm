@@ -1,3 +1,5 @@
+; This program prints "Hello world!" to terminal.
+
 loop: ld text       ; Load a character
 jmz END             ; If end of string, then terminate
 st IO               ; Put character to terminal

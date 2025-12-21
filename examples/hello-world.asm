@@ -1,6 +1,6 @@
 loop: ld text       ; Load a character
 jmz END             ; If end of string, then terminate
-st IO               ; Put charater to terminal
+st IO               ; Put character to terminal
 
 ld loop             ; Increment the character pointer
 add const1

@@ -4,6 +4,19 @@
 #include "stdlib.h"
 #include "../../common/exit-code.h"
 
+static void zeroTerminate(char** string, int* lineNumber) {
+    if (**string == ';' && *(*string + 1) != '\n' && *(*string + 1) != 0) { // If a non-empty comment follows the token
+        *(*string + 1) = ';'; // Move the start of the comment one character forward
+    }
+
+    if (**string == '\n') {
+        ++*lineNumber;
+    }
+
+    **string = 0;
+    ++*string;
+}
+
 struct Token getToken(char** string, int* lineNumber) {
     bool isComment = false;
 
@@ -27,6 +40,8 @@ struct Token getToken(char** string, int* lineNumber) {
 
     char* result = *string;
 
+    // TODO handle ' ' as one token
+
     if (*result == '"') {
         do { // Find the end of the string
             if (**string == '\n') {
@@ -45,46 +60,24 @@ struct Token getToken(char** string, int* lineNumber) {
             exit(ExitCodeUnterminatedString);
         }
 
-        // Zero-terminate the token. **string should be '"', *(*string + 1) should be whitespace, *(*string + 2) should be the next token.
-        if (*(*string + 1) == 0) {
-            ++*string;
-        } else {
-            if (!isspace(*(*string + 1)) && *(*string + 1) != ';') {
+        ++*string; // Now **string should be the next character after the closing quote
+
+        if (**string != 0) {
+            if (!isspace(**string) && **string != ';') {
                 printf("Error on line %d: unexpected character '%c'.\n", *lineNumber, *(*string + 1));
                 exit(ExitCodeUnexpectedCharacter);
             }
 
-            if (*(*string + 1) == ';' && *(*string + 2) != '\n' && *(*string + 2) != 0) { // If a non-empty comment follows the token
-                *(*string + 2) = ';'; // Move the start of the comment one character forward
-            }
-
-            if (*(*string + 1) == '\n') {
-                ++*lineNumber;
-            }
-        
-            *(*string + 1) = 0;
-            *string += 2;
+            zeroTerminate(string, lineNumber);
         }
     } else {
         while (!isspace(**string) && **string != ';' && **string != 0) { // Find the end of the token
             ++*string;
         }
 
-        if (**string == 0) {
-            return (struct Token) { tokenStartLineNumber, result };
+        if (**string != 0) {
+            zeroTerminate(string, lineNumber);
         }
-
-        if (**string == ';' && *(*string + 1) != '\n' && *(*string + 1) != 0) { // If a non-empty comment follows the token
-            *(*string + 1) = ';'; // Move the start of the comment one character forward
-        }
-
-        if (**string == '\n') {
-            ++*lineNumber;
-        }
-
-        // Zero-terminate the token
-        **string = 0;
-        ++*string;
     }
 
     return (struct Token) { tokenStartLineNumber, result };

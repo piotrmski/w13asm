@@ -46,6 +46,11 @@ struct LabelUse {
     int address;
 };
 
+struct LabelUseParseResult {
+    char* name;
+    int offset;
+};
+
 struct AssemblerState {
     char* source;
     int lineNumber;
@@ -55,6 +60,7 @@ struct AssemblerState {
     int labelDefinitionsCount;
     struct LabelUse labelUses[MAX_LABEL_USES];
     int labelUsesCount;
+    struct AssemblerResult result;
 };
 
 static void assertNoMemoryViolation(struct AssemblerState* state, int address, int lineNumber) {
@@ -398,8 +404,52 @@ static bool isValidLabelDefinitionRemoveColon(struct Token token, struct Assembl
     return true;
 }
 
+static int parseNumberLiteral(struct Token token) {
+    char* endChar;
+    int result = strtol(token.value, &endChar, 0);
+    if (*endChar != 0) {
+        printf("Error on line %d: \"%s\" is not a valid number.\n", token.lineNumber, token.value);
+        exit(ExitCodeInvalidNumberLiteral);
+    }
+    return result;
+}
+
+static struct LabelUseParseResult parseLabelUse(struct Token token) {
+    char* offsetSign = strpbrk(token.value, "+-");
+    int offset;
+    if (offsetSign != NULL) {
+        offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, offsetSign });
+        *offsetSign = 0;
+    }
+    return (struct LabelUseParseResult) { token.value, offset };
+}
+
 static void insertInstruction(struct AssemblerState* state, enum Instruction instruction) {
-    // TODO
+    assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
+    assertNoMemoryViolation(state, state->currentAddress + 1, state->lineNumber);
+    state->programMemoryWritten[state->currentAddress] = true;
+    state->programMemoryWritten[state->currentAddress + 1] = true;
+    state->result.dataType[state->currentAddress] = DataTypeInstruction;
+
+    unsigned short instructionCode = instruction << 13;
+    struct Token param = getNextToken(state);
+
+    if (isNumberLiteral(param.value)) {
+        int paramValue = parseNumberLiteral(param);
+        if (paramValue < 0 || paramValue >= ADDRESS_SPACE_SIZE) {
+            printf("Error on line %d: attempting to reference invalid address 0x%04X.\n", param.lineNumber, paramValue);
+            exit(ExitCodeReferenceToInvalidAddress);
+        } 
+        instructionCode |= paramValue;
+    } else {
+        struct LabelUseParseResult labelUse = parseLabelUse(param);
+        state->labelUses[state->labelUsesCount++] =
+            (struct LabelUse) { labelUse.name, labelUse.offset, 0, param.lineNumber, state->currentAddress };
+        state->labelUses[state->labelUsesCount++] =
+            (struct LabelUse) { labelUse.name, labelUse.offset, 1, param.lineNumber, state->currentAddress + 1 };
+    }
+    state->result.programMemory[state->currentAddress++] = instructionCode;
+    state->result.programMemory[state->currentAddress++] = instructionCode >> 8;
 }
 
 static void applyDirective(struct AssemblerState* state, enum Directive directive) {
@@ -411,7 +461,15 @@ static void declareString(struct AssemblerState* state, struct Token token) {
 }
 
 static void declareNumber(struct AssemblerState* state, struct Token token) {
-    // TODO
+    assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
+    state->programMemoryWritten[state->currentAddress] = true;
+    state->result.dataType[state->currentAddress] = DataTypeInt;
+    int number = parseNumberLiteral(token);
+    if (number < CHAR_MIN || number > UCHAR_MAX) {
+        printf("Error on line %d: number %d is out of range.\n", token.lineNumber, number);
+        exit(ExitCodeNumberLiteralOutOutRange);
+    }
+    state->result.programMemory[state->currentAddress++] = number;
 }
 
 static void declareCharacter(struct AssemblerState* state, struct Token token) {
@@ -472,14 +530,16 @@ static bool parseStatement(struct AssemblerState* state) {
     return true;
 }
 
-static struct AssemblerResult getResult(struct AssemblerState* state) {
-    return (struct AssemblerResult){ { 0 }, { DataTypeNone }, { NULL } }; // TODO
+static void resolveLabels(struct AssemblerState* state) {
+    // TODO
 }
 
 struct AssemblerResult assemble(char* source) {
-    struct AssemblerState state = { source, 1, 0, { false }, { 0 }, 0, { 0 }, 0 };
+    struct AssemblerState state = { source, 1, 0, { false }, { 0 }, 0, { 0 }, 0, (struct AssemblerResult){ { 0 }, { DataTypeNone }, { NULL } } };
 
     while (parseStatement(&state)) {}
 
-    return getResult(&state);
+    resolveLabels(&state);
+
+    return state.result;
 }

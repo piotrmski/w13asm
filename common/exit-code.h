@@ -14,8 +14,7 @@ enum ExitCode {
     ExitCodeLabelNameTooLong,
     ExitCodeInvalidLabelName,
     ExitCodeLabelNameNotUnique,
-    ExitCodeInvalidMinus, // ??
-    ExitCodeNumberWithoutDigits, // ??
+    ExitCodeInvalidNumberLiteral,
     ExitCodeInvalidEscapeSequence,
     ExitCodeUnterminatedString,
     ExitCodeDeclaringValueOutOfMemoryRange,

@@ -47,6 +47,8 @@ struct LabelUse {
 };
 
 struct AssemblerState {
+    char* source;
+    int lineNumber;
     int currentAddress;
     bool programMemoryWritten[ADDRESS_SPACE_SIZE];
     struct LabelDefinition labelDefinitions[MAX_LABEL_DEFS];
@@ -56,7 +58,7 @@ struct AssemblerState {
 };
 
 static void assertNoMemoryViolation(struct AssemblerState* state, int address, int lineNumber) {
-    if (address >= ADDRESS_SPACE_SIZE) {
+    if (address < 0 || address >= ADDRESS_SPACE_SIZE) {
         printf("Error on line %d: attempting to declare memory value outside of address space.\n", lineNumber);
         exit(ExitCodeDeclaringValueOutOfMemoryRange);
     }
@@ -129,6 +131,19 @@ static enum Directive getDirective(char* name) {
         return DirectiveInvalid;
     }
 }
+
+static bool isStringLiteral(char* tokenValue) {
+    return tokenValue[0] = '"';
+}
+
+static bool isNumberLiteral(char* tokenValue) {
+    return tokenValue[0] >= '0' && tokenValue[0] <= '9' || tokenValue[0] == '-' && tokenValue[0] >= '0' && tokenValue[0] <= '9';
+}
+
+static bool isCharacterLiteral(char* tokenValue) {
+    return tokenValue[0] == '\'' || tokenValue[0] == '-' && tokenValue[1] == '\'';
+}
+
 
 // static void parseToken(struct Token* token, struct AssemblerState* state, struct AssemblerResult* result, FILE* filePtr) {
 //     switch (token->type) {
@@ -348,6 +363,10 @@ static enum Directive getDirective(char* name) {
 //     exit(ExitCodeUndefinedLabel);
 // }
 
+static struct Token getNextToken(struct AssemblerState* state) {
+    return getToken(&state->source, &state->lineNumber);
+}
+
 static bool isValidLabelDefinitionRemoveColon(struct Token token, struct AssemblerState* state) {
     if (token.value[--token.length] != ':') {
         return false;
@@ -379,11 +398,31 @@ static bool isValidLabelDefinitionRemoveColon(struct Token token, struct Assembl
     return true;
 }
 
-static struct Token parseLabelDefinitionsGetNextToken(struct AssemblerState* state, char** source, int* lineNumber) {
+static void insertInstruction(struct AssemblerState* state, enum Instruction instruction) {
+    // TODO
+}
+
+static void applyDirective(struct AssemblerState* state, enum Directive directive) {
+    // TODO
+}
+
+static void declareString(struct AssemblerState* state, struct Token token) {
+    // TODO
+}
+
+static void declareNumber(struct AssemblerState* state, struct Token token) {
+    // TODO
+}
+
+static void declareCharacter(struct AssemblerState* state, struct Token token) {
+    // TODO
+}
+
+static struct Token parseLabelDefinitionsGetNextToken(struct AssemblerState* state) {
     struct Token token;
 
     while (true) {
-        token = getToken(source, lineNumber);
+        token = getNextToken(state);
         if (isValidLabelDefinitionRemoveColon(token, state)) {
             if (state->labelDefinitionsCount == MAX_LABEL_DEFS - 1) {
                 printf("Error on line %d: too many label definitions.\n", token.lineNumber);
@@ -399,13 +438,13 @@ static struct Token parseLabelDefinitionsGetNextToken(struct AssemblerState* sta
 }
 
 /// Returns true if statement parsing should continue
-static bool parseStatement(struct AssemblerState* state, char** source, int* lineNumber) {
+static bool parseStatement(struct AssemblerState* state) {
     int labelDefinitionsStartIndex = state->labelDefinitionsCount;
-    struct Token firstTokenAfterLabels = parseLabelDefinitionsGetNextToken(state, source, lineNumber);
+    struct Token firstTokenAfterLabels = parseLabelDefinitionsGetNextToken(state);
 
     if (firstTokenAfterLabels.value == NULL) {
         if (state->labelDefinitionsCount > labelDefinitionsStartIndex) {
-            printf("Error on line %d: unexpected label definition at the end of the file.\n", *lineNumber);
+            printf("Error on line %d: unexpected label definition at the end of the file.\n", state->lineNumber);
             exit(ExitCodeUnexpectedLabelAtEndOfFile);
         }
 
@@ -413,19 +452,34 @@ static bool parseStatement(struct AssemblerState* state, char** source, int* lin
     }
 
     enum Instruction instruction;
+    enum Directive directive;
 
     if ((instruction = getInstruction(firstTokenAfterLabels.value)) != InstructionInvalid) {
-        // TODO
-    } // TODO else if is directive, else if is number declaration, else if is character declaration, else if is string declaration, else error
+        insertInstruction(state, instruction);
+    } else if ((directive = getDirective(firstTokenAfterLabels.value)) != DirectiveInvalid) {
+        applyDirective(state, directive);
+    } else if (isStringLiteral(firstTokenAfterLabels.value)) {
+        declareString(state, firstTokenAfterLabels);
+    } else if (isNumberLiteral(firstTokenAfterLabels.value)) {
+        declareNumber(state, firstTokenAfterLabels);
+    } else if (isCharacterLiteral(firstTokenAfterLabels.value)) {
+        declareCharacter(state, firstTokenAfterLabels);
+    } else {
+        printf("Error on line %d: invalid token \"%s\".\n", firstTokenAfterLabels.lineNumber, firstTokenAfterLabels.value);
+        exit(ExitCodeInvalidToken);
+    }
+
+    return true;
+}
+
+static struct AssemblerResult getResult(struct AssemblerState* state) {
+    return (struct AssemblerResult){ { 0 }, { DataTypeNone }, { NULL } }; // TODO
 }
 
 struct AssemblerResult assemble(char* source) {
-    int lineNumber = 1;
-    struct AssemblerState state = { 0, { false }, { 0 }, 0, { 0 }, 0 };
+    struct AssemblerState state = { source, 1, 0, { false }, { 0 }, 0, { 0 }, 0 };
 
-    while (parseStatement(&state, &source, &lineNumber)) {}
+    while (parseStatement(&state)) {}
 
-    struct AssemblerResult result = { { 0 }, { DataTypeNone }, { NULL } };
-
-    return result;
+    return getResult(&state);
 }

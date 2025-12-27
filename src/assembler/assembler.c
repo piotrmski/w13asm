@@ -51,6 +51,11 @@ struct LabelUseParseResult {
     int offset;
 };
 
+struct EscapeSequenceParseResult {
+    char character;
+    int length;
+};
+
 struct AssemblerState {
     char* source;
     int lineNumber;
@@ -74,14 +79,6 @@ static void assertNoMemoryViolation(struct AssemblerState* state, int address, i
         exit(ExitCodeMemoryValueOverridden);
     }
 }
-
-// static void assertNumberLiteralInRange(struct Token* token) {
-//     if (token->numberValue < CHAR_MIN ||
-//         token->numberValue > UCHAR_MAX) {
-//         printf("Error on line %d: number %d is out of range for a number literal.\n", token->lineNumber, token->numberValue);
-//         exit(ExitCodeNumberLiteralOutOutRange);
-//     }
-// }
 
 static char charUppercase(char ch) {
     if (ch >= 'a' && ch <= 'z') return ch - 0x20;
@@ -150,224 +147,16 @@ static bool isCharacterLiteral(char* tokenValue) {
     return tokenValue[0] == '\'' || tokenValue[0] == '-' && tokenValue[1] == '\'';
 }
 
+struct LabelDefinition* findLabelDefinition(struct AssemblerState* state, struct LabelUse* labelUse) {
+    for (int i = 0; i < state->labelDefinitionsCount; ++i) {
+        if (strcmp(state->labelDefinitions[i].name, labelUse->name) == 0) {
+            return &state->labelDefinitions[i];
+        }
+    }
 
-// static void parseToken(struct Token* token, struct AssemblerState* state, struct AssemblerResult* result, FILE* filePtr) {
-//     switch (token->type) {
-//         case TokenTypeNone:
-//             break;
-//         case TokenTypeLabelDefinition:
-//             if (state->labelDefinitionsIndex >= MAX_LABELS) {
-//                 printf("Error on line %d: too many labels.\n", token->lineNumber);
-//                 exit(ExitCodeTooManyLabels);
-//             }
-//             state->labelDefinitions[state->labelDefinitionsIndex].name = token->stringValue;
-//             state->labelDefinitions[state->labelDefinitionsIndex].lineNumber = token->lineNumber;
-//             state->labelDefinitions[state->labelDefinitionsIndex++].address = state->address;
-//             state->lastTokenWasLabelDefinition = true;
-//             for (int i = 0; i < state->labelDefinitionsIndex - 1; ++i) {
-//                 if (strcmp(state->labelDefinitions[i].name, token->stringValue) == 0) {
-//                     printf("Error on line %d: label name \"%s\" is not unique.\n", token->lineNumber, token->stringValue);
-//                     exit(ExitCodeLabelNameNotUnique);
-//                 }
-//             }
-//             break;
-//         case TokenTypeLabelUseOrInstruction:
-//             enum Instruction instruction = getInstruction(token->stringValue);
-//             if (instruction == InstructionInvalid) {
-//                 printf("Error on line %d: invalid instruction \"%s\".\n", token->lineNumber, token->stringValue);
-//                 exit(ExitCodeInvalidInstruction);
-//             } else {
-//                 assertNoMemoryViolation(state, token, state->address);
-//                 assertNoMemoryViolation(state, token, state->address + 1);
-//                 unsigned short opcode = (char)instruction << 13;
-//                 result->dataType[state->address] = DataTypeInstruction;
-//                 state->programMemoryWritten[state->address] = true;
-//                 state->programMemoryWritten[state->address + 1] = true;
-//                 getToken(token, filePtr);
-//                 switch (token->type) {
-//                     case TokenTypeDecimalNumber:
-//                     case TokenTypeHexNumber:
-//                     case TokenTypeOctalNumber:
-//                     case TokenTypeBinaryNumber:
-//                         if (token->numberValue < 0 || token->numberValue >= ADDRESS_SPACE_SIZE) {
-//                             printf("Error on line %d: attempting to reference invalid address 0x%04X.\n", token->lineNumber, token->numberValue);
-//                             exit(ExitCodeReferenceToInvalidAddress);
-//                         }
-//                         opcode |= token->numberValue;
-//                         break;
-//                     case TokenTypeLabelUseOrInstruction:
-//                         if (state->labelUsesIndex >= MAX_LABELS) {
-//                             printf("Error on line %d: too many labels.\n", token->lineNumber);
-//                             exit(ExitCodeTooManyLabels);
-//                         }
-//                         state->labelUses[state->labelUsesIndex].name = token->stringValue;
-//                         state->labelUses[state->labelUsesIndex].lineNumber = token->lineNumber;
-//                         state->labelUses[state->labelUsesIndex++].address = state->address;
-//                         break;
-//                     default:
-//                         printf("Error on line %d: unexpected token following instruction name.\n", token->lineNumber);
-//                         exit(ExitCodeUnexpectedTokenAfterInstruction);
-//                 }
-//                 result->programMemory[state->address] = opcode;
-//                 result->programMemory[state->address + 1] = opcode >> 8;
-//                 state->address += 2;
-//             }
-//             state->lastTokenWasLabelDefinition = false;
-//             break;
-//         case TokenTypeDirective:
-//             enum Directive directive = getDirective(token->stringValue);
-//             switch (directive) {
-//                 case DirectiveOrg:
-//                     getToken(token, filePtr);
-//                     switch (token->type) {
-//                         case TokenTypeDecimalNumber:
-//                         case TokenTypeHexNumber:
-//                         case TokenTypeOctalNumber:
-//                         case TokenTypeBinaryNumber:
-//                             if (token->numberValue < 0 || token->numberValue >= ADDRESS_SPACE_SIZE) {
-//                                 printf("Error on line %d: attempting to set origin to invalid address 0x%04X.\n", token->lineNumber, token->numberValue);
-//                                 exit(ExitCodeOriginOutOfMemoryRange);
-//                             }
-//                             state->address = token->numberValue;
-//                             if (state->lastTokenWasLabelDefinition) {
-//                                 state->labelDefinitions[state->labelDefinitionsIndex - 1].address = state->address;
-//                             }
-//                             break;
-//                         default:
-//                             printf("Error on line %d: unexpected token following .ORG.\n", token->lineNumber);
-//                             exit(ExitCodeUnexpectedTokenAfterOrg);
-//                     }
-//                     break;
-//                 case DirectiveAlign:
-//                     getToken(token, filePtr);
-//                     switch (token->type) {
-//                         case TokenTypeDecimalNumber:
-//                         case TokenTypeHexNumber:
-//                         case TokenTypeOctalNumber:
-//                         case TokenTypeBinaryNumber:
-//                             if (token->numberValue < 1 || token->numberValue > 12) {
-//                                 printf("Error on line %d: invalid align parameter \"%d\". Must be between 1 and 12.\n", token->lineNumber, token->numberValue);
-//                                 exit(ExitCodeInvalidAlignParameter);
-//                             }
-//                             unsigned short bitsToReset = (1 << token->numberValue) - 1;
-//                             state->address = (state->address & bitsToReset) == 0
-//                                 ? state->address
-//                                 : ((state->address & ~bitsToReset) + bitsToReset + 1);
-//                             if (state->address >= ADDRESS_SPACE_SIZE) {
-//                                 printf("Error on line %d: attempting to set origin via align to invalid address 0x%04X.\n", token->lineNumber, state->address);
-//                                 exit(ExitCodeOriginOutOfMemoryRange);
-//                             }
-//                             if (state->lastTokenWasLabelDefinition) {
-//                                 state->labelDefinitions[state->labelDefinitionsIndex - 1].address = state->address;
-//                             }
-//                             break;
-//                         default:
-//                             printf("Error on line %d: unexpected token following .ALIGN.\n", token->lineNumber);
-//                             exit(ExitCodeUnexpectedTokenAfterOrg);
-//                     }
-//                     break;
-//                 case DirectiveFill:
-//                     unsigned char valueToFill;
-//                     unsigned char fillCount;
-//                     enum DataType valueToFillType;
-//                     getToken(token, filePtr);
-//                     switch (token->type) {
-//                         case TokenTypeDecimalNumber:
-//                         case TokenTypeHexNumber:
-//                         case TokenTypeOctalNumber:
-//                         case TokenTypeBinaryNumber:
-//                             assertNumberLiteralInRange(token);
-//                             valueToFill = token->numberValue;
-//                             valueToFillType = DataTypeInt;
-//                             break;
-//                         case TokenTypeNZTString:
-//                             if (token->stringValue[0] == 0 || token->stringValue[1] != 0) {
-//                                 printf("Error on line %d: expected no more or less than one character.\n", token->lineNumber);
-//                                 exit(ExitCodeFillValueStringNotAChar);
-//                             }
-//                             valueToFill = token->stringValue[0];
-//                             valueToFillType = DataTypeChar;
-//                             break;
-//                         default:
-//                             printf("Error on line %d: unexpected token following .FILL.\n", token->lineNumber);
-//                             exit(ExitCodeUnexpectedTokenAfterFill);
-//                     }
-//                     getToken(token, filePtr);
-//                     switch (token->type) {
-//                         case TokenTypeDecimalNumber:
-//                         case TokenTypeHexNumber:
-//                         case TokenTypeOctalNumber:
-//                         case TokenTypeBinaryNumber:
-//                             if (token->numberValue < 1) {
-//                                 printf("Error on line %d: fill count must be positive.\n", token->lineNumber);
-//                                 exit(ExitCodeFillCountNotPositive);
-//                             }
-//                             fillCount = token->numberValue;
-//                             break;
-//                         default:
-//                             printf("Error on line %d: unexpected token following .FILL value.\n", token->lineNumber);
-//                             exit(ExitCodeUnexpectedTokenAfterFill);
-//                     }
-//                     for (int i = 0; i < fillCount; ++i) {
-//                         assertNoMemoryViolation(state, token, state->address);
-//                         result->programMemory[state->address] = valueToFill;
-//                         result->dataType[state->address] = valueToFillType;
-//                         state->programMemoryWritten[state->address++] = true;
-//                     }
-//                     break;
-//                 default:
-//                     printf("Error on line %d: invalid directive \"%s\".\n", token->lineNumber, token->stringValue);
-//                     exit(ExitCodeInvalidDirective);
-//             }
-//             state->lastTokenWasLabelDefinition = false;
-//             break;
-//         case TokenTypeDecimalNumber:
-//         case TokenTypeHexNumber:
-//         case TokenTypeOctalNumber:
-//         case TokenTypeBinaryNumber:
-//             assertNoMemoryViolation(state, token, state->address);
-//             assertNumberLiteralInRange(token);
-//             result->programMemory[state->address] = token->numberValue;
-//             result->dataType[state->address] = DataTypeInt;
-//             state->programMemoryWritten[state->address++] = true;
-//             state->lastTokenWasLabelDefinition = false;
-//             break;
-//         case TokenTypeZTString:
-//         case TokenTypeNZTString:
-//             assertNoMemoryViolation(state, token, state->address);
-//             result->dataType[state->address] = DataTypeChar;
-//             char* strptr = token->stringValue;
-//             while(*strptr != 0) {
-//                 assertNoMemoryViolation(state, token, state->address);
-//                 result->programMemory[state->address] = *strptr;
-//                 result->dataType[state->address] = DataTypeChar;
-//                 state->programMemoryWritten[state->address++] = true;
-//                 ++strptr;
-//             }
-//             if (token->type == TokenTypeZTString) {
-//                 assertNoMemoryViolation(state, token, state->address);
-//                 result->programMemory[state->address] = 0;
-//                 result->dataType[state->address] = DataTypeChar;
-//                 state->programMemoryWritten[state->address++] = true;
-//             }
-//             state->lastTokenWasLabelDefinition = false;
-//             break;
-//         default:
-//             printf("Error on line %d: invalid token \"%s\".\n", token->lineNumber, token->stringValue);
-//             exit(ExitCodeInvalidToken);
-//     }
-// }
-
-// struct LabelInfo* findLabelDefinition(struct AssemblerState* state, struct LabelInfo* labelUse) {
-//     for (int i = 0; i < state->labelDefinitionsIndex; ++i) {
-//         if (strcmp(state->labelDefinitions[i].name, labelUse->name) == 0) {
-//             return &state->labelDefinitions[i];
-//         }
-//     }
-
-//     printf("Error on line %d: label \"%s\" is undefined.\n", labelUse->lineNumber, labelUse->name);
-//     exit(ExitCodeUndefinedLabel);
-// }
+    printf("Error on line %d: label \"%s\" is undefined.\n", labelUse->lineNumber, labelUse->name);
+    exit(ExitCodeUndefinedLabel);
+}
 
 static struct Token getNextToken(struct AssemblerState* state) {
     return getToken(&state->source, &state->lineNumber);
@@ -424,6 +213,44 @@ static struct LabelUseParseResult parseLabelUse(struct Token token) {
     return (struct LabelUseParseResult) { token.value, offset };
 }
 
+static bool isHexDigit(char character) {
+    return character >= '0' && character <= '9' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z';
+}
+
+static struct EscapeSequenceParseResult parseEscapeSequence(struct Token token) {
+    switch (token.value[1]) {
+        case 'n': 
+        case 'N':
+            return (struct EscapeSequenceParseResult) { '\n', 2 };
+        case 't': 
+        case 'T': 
+            return (struct EscapeSequenceParseResult) { '\t', 2 };
+        case 'r': 
+        case 'R': 
+            return (struct EscapeSequenceParseResult) { '\r', 2 };
+        case '\'':
+            return (struct EscapeSequenceParseResult) { '\'', 2 };
+        case '"':
+            return (struct EscapeSequenceParseResult) { '"', 2 };
+        case '\\':
+            return (struct EscapeSequenceParseResult) { '\\', 2 };
+        case 'x':
+        case 'X':
+            if (!isHexDigit(token.value[2]) || !isHexDigit(token.value[3])) {
+                printf("Error on line %d: invalid escape sequence starting with \"\\%c\".\n", token.lineNumber, token.value[1]);
+                exit(ExitCodeInvalidEscapeSequence);
+            }
+            char numberString[5] = "0x00";
+            numberString[2] = token.value[2];
+            numberString[3] = token.value[3];
+            unsigned char number = parseNumberLiteral((struct Token) { token.lineNumber, 5, numberString });
+            return (struct EscapeSequenceParseResult) { number, 4 };
+        default:
+            printf("Error on line %d: invalid escape sequence \"\\%c\".\n", token.lineNumber, token.value[1]);
+            exit(ExitCodeInvalidEscapeSequence);
+    }
+}
+
 static void insertInstruction(struct AssemblerState* state, enum Instruction instruction) {
     assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
     assertNoMemoryViolation(state, state->currentAddress + 1, state->lineNumber);
@@ -452,12 +279,23 @@ static void insertInstruction(struct AssemblerState* state, enum Instruction ins
     state->result.programMemory[state->currentAddress++] = instructionCode >> 8;
 }
 
-static void applyDirective(struct AssemblerState* state, enum Directive directive) {
+static void applyDirective(struct AssemblerState* state, enum Directive directive, int labelDefinitionsStartIndex) {
     // TODO
 }
 
 static void declareString(struct AssemblerState* state, struct Token token) {
-    // TODO
+    for (int i = 1; i < token.length - 1; ++i) {
+        assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
+        state->programMemoryWritten[state->currentAddress] = true;
+        state->result.dataType[state->currentAddress] = DataTypeChar;
+        if (token.value[i] == '\\') {
+            struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.length, 0, token.value + i });
+            state->result.programMemory[state->currentAddress] = parsed.character;
+            state->currentAddress += parsed.length;
+        } else {
+            state->result.programMemory[state->currentAddress++] = token.value[i];
+        }
+    }
 }
 
 static void declareNumber(struct AssemblerState* state, struct Token token) {
@@ -515,7 +353,7 @@ static bool parseStatement(struct AssemblerState* state) {
     if ((instruction = getInstruction(firstTokenAfterLabels.value)) != InstructionInvalid) {
         insertInstruction(state, instruction);
     } else if ((directive = getDirective(firstTokenAfterLabels.value)) != DirectiveInvalid) {
-        applyDirective(state, directive);
+        applyDirective(state, directive, labelDefinitionsStartIndex);
     } else if (isStringLiteral(firstTokenAfterLabels.value)) {
         declareString(state, firstTokenAfterLabels);
     } else if (isNumberLiteral(firstTokenAfterLabels.value)) {
@@ -531,7 +369,12 @@ static bool parseStatement(struct AssemblerState* state) {
 }
 
 static void resolveLabels(struct AssemblerState* state) {
-    // TODO
+    for (int i = 0; i < state->labelUsesCount; ++i) {
+        struct LabelUse* labelUse = &state->labelUses[i];
+        struct LabelDefinition* labelDefinition = findLabelDefinition(state, labelUse);
+        int evaluatedAddress = labelDefinition->address + labelUse->offset;
+        state->result.programMemory[labelUse->address] = evaluatedAddress >> (labelUse->address * 8);
+    }
 }
 
 struct AssemblerResult assemble(char* source) {

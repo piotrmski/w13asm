@@ -1,11 +1,12 @@
 #include "assembler.h"
 #include "../tokenizer/tokenizer.h"
+#include "../../common/exit-code.h"
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
-#include "../../common/exit-code.h"
+#include <errno.h>
 
 #define MAX_LABEL_DEFS 0x800
 #define MAX_LABEL_USES 0x2000
@@ -78,6 +79,8 @@ static void assertNoMemoryViolation(struct AssemblerState* state, int address, i
         printf("Error on line %d: attempting to override memory value.\n", lineNumber);
         exit(ExitCodeMemoryValueOverridden);
     }
+
+    state->programMemoryWritten[address] = true;
 }
 
 static char charUppercase(char ch) {
@@ -158,7 +161,7 @@ struct LabelDefinition* findLabelDefinition(struct AssemblerState* state, struct
     exit(ExitCodeUndefinedLabel);
 }
 
-static struct Token getNextToken(struct AssemblerState* state) {
+static struct Token getNextToken(struct AssemblerState* state) { // TODO assert that the token exists in uses
     return getToken(&state->source, &state->lineNumber);
 }
 
@@ -196,7 +199,7 @@ static bool isValidLabelDefinitionRemoveColon(struct Token token, struct Assembl
 static int parseNumberLiteral(struct Token token) {
     char* endChar;
     int result = strtol(token.value, &endChar, 0);
-    if (*endChar != 0) {
+    if (errno  != 0 || *endChar != 0) {
         printf("Error on line %d: \"%s\" is not a valid number.\n", token.lineNumber, token.value);
         exit(ExitCodeInvalidNumberLiteral);
     }
@@ -288,8 +291,6 @@ static char parseCharacterLiteral(struct Token token) {
 static void insertInstruction(struct AssemblerState* state, enum Instruction instruction) {
     assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
     assertNoMemoryViolation(state, state->currentAddress + 1, state->lineNumber);
-    state->programMemoryWritten[state->currentAddress] = true;
-    state->programMemoryWritten[state->currentAddress + 1] = true;
     state->result.dataType[state->currentAddress] = DataTypeInstruction;
 
     unsigned short instructionCode = instruction << 13;
@@ -313,14 +314,96 @@ static void insertInstruction(struct AssemblerState* state, enum Instruction ins
     state->result.programMemory[state->currentAddress++] = instructionCode >> 8;
 }
 
+static void updateCurrentAddress(struct AssemblerState* state, int newAddress, int lineNumber, int labelDefinitionsStartIndex) {
+    if (newAddress < 0 || newAddress >= ADDRESS_SPACE_SIZE) {
+        printf("Error on line %d: attempting to set origin to an invalid address 0x%04X.\n", lineNumber, newAddress);
+        exit(ExitCodeReferenceToInvalidAddress);
+    }
+    state->currentAddress = newAddress;
+    for (int i = labelDefinitionsStartIndex; i < state->labelDefinitionsCount; ++i) {
+        state->labelDefinitions[i].address = newAddress;
+    }
+}
+
+static void applyOrgDirective(struct AssemblerState* state, int labelDefinitionsStartIndex) {
+    struct Token param = getNextToken(state);
+    int paramValue = parseNumberLiteral(param);
+    updateCurrentAddress(state, paramValue, param.lineNumber, labelDefinitionsStartIndex);
+}
+
+static void applyAlignDirective(struct AssemblerState* state, int labelDefinitionsStartIndex) {
+    struct Token param = getNextToken(state);
+    int paramValue = parseNumberLiteral(param);
+    if (paramValue < 1 || paramValue > 12) {
+        printf("Error on line %d: invalid align argument \"%d\". Must be between 1 and 12.\n", param.lineNumber, paramValue);
+        exit(ExitCodeInvalidDirectiveArgument);
+    }
+    unsigned short bitsToReset = (1 << paramValue) - 1;
+    int newAddress = (state->currentAddress & bitsToReset) == 0
+        ? state->currentAddress
+        : ((state->currentAddress & ~bitsToReset) + bitsToReset + 1);
+    updateCurrentAddress(state, newAddress, param.lineNumber, labelDefinitionsStartIndex);
+}
+
+static void applyFillDirective(struct AssemblerState* state) {
+    struct Token valueParam = getNextToken(state);
+    struct Token countParam = getNextToken(state);
+
+    int value, count;
+    enum DataType valueToFillType;
+    
+    if (isCharacterLiteral(valueParam.value)) {
+        valueToFillType = DataTypeChar;
+        value = parseCharacterLiteral(valueParam);
+        if (value < CHAR_MIN || value > UCHAR_MAX) {
+            printf("Error on line %d: character literal \"%s\" evaluates to %d, which is out of range.\n", valueParam.lineNumber, valueParam.value, value);
+            exit(ExitCodeCharacterLiteralOutOutRange);
+        }
+    } else {
+        valueToFillType = DataTypeInt;
+        value = parseNumberLiteral(valueParam);
+        if (value < CHAR_MIN || value > UCHAR_MAX) {
+            printf("Error on line %d: number %d is out of range.\n", valueParam.lineNumber, value);
+            exit(ExitCodeNumberLiteralOutOutRange);
+        }
+    }
+
+    count = parseNumberLiteral(countParam);
+    if (count < 1) {
+        printf("Error on line %d: fill count must be positive.\n", countParam.lineNumber);
+        exit(ExitCodeInvalidDirectiveArgument);
+    }
+
+    for (int i = 0; i < count; ++i) {
+        assertNoMemoryViolation(state, state->currentAddress, countParam.lineNumber);
+        state->result.dataType[state->currentAddress] = valueToFillType;
+        state->result.programMemory[state->currentAddress++] = value;
+    }
+}
+
+static void applyLsbOrMsbDirective(struct AssemblerState* state, enum Directive directive) {
+    struct Token param = getNextToken(state);
+    struct LabelUseParseResult labelUse = parseLabelUse(param);
+    int byte = directive == DirectiveLsb ? 0 : 1;
+    assertNoMemoryViolation(state, state->currentAddress, param.lineNumber);
+    state->result.dataType[state->currentAddress] = DataTypeInt;
+    state->labelUses[state->labelUsesCount++] =
+        (struct LabelUse) { labelUse.name, labelUse.offset, byte, param.lineNumber, state->currentAddress };
+}
+
 static void applyDirective(struct AssemblerState* state, enum Directive directive, int labelDefinitionsStartIndex) {
-    // TODO
+    switch (directive) {
+        case DirectiveOrg: return applyOrgDirective(state, labelDefinitionsStartIndex);
+        case DirectiveAlign: return applyAlignDirective(state, labelDefinitionsStartIndex);
+        case DirectiveFill: return applyFillDirective(state);
+        case DirectiveLsb:
+        case DirectiveMsb: return applyLsbOrMsbDirective(state, directive);
+    }
 }
 
 static void declareString(struct AssemblerState* state, struct Token token) {
     for (int i = 1; i < token.length - 1; ++i) {
         assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
-        state->programMemoryWritten[state->currentAddress] = true;
         state->result.dataType[state->currentAddress] = DataTypeChar;
         if (token.value[i] == '\\') {
             struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.length, 0, token.value + i });
@@ -334,7 +417,6 @@ static void declareString(struct AssemblerState* state, struct Token token) {
 
 static void declareNumber(struct AssemblerState* state, struct Token token) {
     assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
-    state->programMemoryWritten[state->currentAddress] = true;
     state->result.dataType[state->currentAddress] = DataTypeInt;
     int number = parseNumberLiteral(token);
     if (number < CHAR_MIN || number > UCHAR_MAX) {
@@ -346,7 +428,6 @@ static void declareNumber(struct AssemblerState* state, struct Token token) {
 
 static void declareCharacter(struct AssemblerState* state, struct Token token) {
     assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
-    state->programMemoryWritten[state->currentAddress] = true;
     state->result.dataType[state->currentAddress] = DataTypeChar;
     int number = parseCharacterLiteral(token);
     if (number < CHAR_MIN || number > UCHAR_MAX) {
@@ -415,6 +496,12 @@ static void resolveLabels(struct AssemblerState* state) {
         struct LabelUse* labelUse = &state->labelUses[i];
         struct LabelDefinition* labelDefinition = findLabelDefinition(state, labelUse);
         int evaluatedAddress = labelDefinition->address + labelUse->offset;
+        
+        if (evaluatedAddress < 0 || evaluatedAddress >= ADDRESS_SPACE_SIZE) {
+            printf("Error on line %d: \"%s%s%d\" evaluates to %d, which is an invalid address.\n", labelUse->lineNumber, labelUse->name, labelUse->offset < 0 ? "" : "+", labelUse->offset);
+            exit(ExitCodeReferenceToInvalidAddress);
+        }
+        
         state->result.programMemory[labelUse->address] = evaluatedAddress >> (labelUse->address * 8);
     }
 }

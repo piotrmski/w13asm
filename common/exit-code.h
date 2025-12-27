@@ -25,7 +25,6 @@ enum ExitCode {
     ExitCodeOriginOutOfMemoryRange,
     ExitCodeInvalidDirectiveArgument,
     ExitCodeInvalidInstructionArgument,
-    ExitCodeFillCountNotPositive,
     ExitCodeInvalidDirective,
     ExitCodeInvalidToken,
     ExitCodeInvalidCharacterLiteral,

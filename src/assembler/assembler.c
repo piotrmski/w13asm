@@ -161,8 +161,17 @@ struct LabelDefinition* findLabelDefinition(struct AssemblerState* state, struct
     exit(ExitCodeUndefinedLabel);
 }
 
-static struct Token getNextToken(struct AssemblerState* state) { // TODO assert that the token exists in uses
+static struct Token getNextToken(struct AssemblerState* state) {
     return getToken(&state->source, &state->lineNumber);
+}
+
+static struct Token getNextNonEmptyToken(struct AssemblerState* state) {
+    struct Token result = getNextToken(state);
+    if (result.value == NULL) {
+        printf("Error on line %d: unexpected end of file.\n", state->lineNumber);
+        exit(ExitCodeUnexpectedEndOfFile);
+    }
+    return result;
 }
 
 static bool isValidLabelDefinitionRemoveColon(struct Token token, struct AssemblerState* state) {
@@ -294,7 +303,7 @@ static void insertInstruction(struct AssemblerState* state, enum Instruction ins
     state->result.dataType[state->currentAddress] = DataTypeInstruction;
 
     unsigned short instructionCode = instruction << 13;
-    struct Token param = getNextToken(state);
+    struct Token param = getNextNonEmptyToken(state);
 
     if (isNumberLiteral(param.value)) {
         int paramValue = parseNumberLiteral(param);
@@ -326,13 +335,13 @@ static void updateCurrentAddress(struct AssemblerState* state, int newAddress, i
 }
 
 static void applyOrgDirective(struct AssemblerState* state, int labelDefinitionsStartIndex) {
-    struct Token param = getNextToken(state);
+    struct Token param = getNextNonEmptyToken(state);
     int paramValue = parseNumberLiteral(param);
     updateCurrentAddress(state, paramValue, param.lineNumber, labelDefinitionsStartIndex);
 }
 
 static void applyAlignDirective(struct AssemblerState* state, int labelDefinitionsStartIndex) {
-    struct Token param = getNextToken(state);
+    struct Token param = getNextNonEmptyToken(state);
     int paramValue = parseNumberLiteral(param);
     if (paramValue < 1 || paramValue > 12) {
         printf("Error on line %d: invalid align argument \"%d\". Must be between 1 and 12.\n", param.lineNumber, paramValue);
@@ -346,8 +355,8 @@ static void applyAlignDirective(struct AssemblerState* state, int labelDefinitio
 }
 
 static void applyFillDirective(struct AssemblerState* state) {
-    struct Token valueParam = getNextToken(state);
-    struct Token countParam = getNextToken(state);
+    struct Token valueParam = getNextNonEmptyToken(state);
+    struct Token countParam = getNextNonEmptyToken(state);
 
     int value, count;
     enum DataType valueToFillType;
@@ -382,7 +391,7 @@ static void applyFillDirective(struct AssemblerState* state) {
 }
 
 static void applyLsbOrMsbDirective(struct AssemblerState* state, enum Directive directive) {
-    struct Token param = getNextToken(state);
+    struct Token param = getNextNonEmptyToken(state);
     struct LabelUseParseResult labelUse = parseLabelUse(param);
     int byte = directive == DirectiveLsb ? 0 : 1;
     assertNoMemoryViolation(state, state->currentAddress, param.lineNumber);
@@ -442,7 +451,7 @@ static struct Token parseLabelDefinitionsGetNextToken(struct AssemblerState* sta
 
     while (true) {
         token = getNextToken(state);
-        if (isValidLabelDefinitionRemoveColon(token, state)) {
+        if (token.value != NULL && isValidLabelDefinitionRemoveColon(token, state)) {
             if (state->labelDefinitionsCount == MAX_LABEL_DEFS - 1) {
                 printf("Error on line %d: too many label definitions.\n", token.lineNumber);
                 exit(ExitCodeTooManyLabelDefinitions);
@@ -464,7 +473,7 @@ static bool parseStatement(struct AssemblerState* state) {
     if (firstTokenAfterLabels.value == NULL) {
         if (state->labelDefinitionsCount > labelDefinitionsStartIndex) {
             printf("Error on line %d: unexpected label definition at the end of the file.\n", state->lineNumber);
-            exit(ExitCodeUnexpectedLabelAtEndOfFile);
+            exit(ExitCodeUnexpectedEndOfFile);
         }
 
         return false;

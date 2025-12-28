@@ -29,7 +29,7 @@ enum ExitCode {
     ExitCodeInvalidToken,
     ExitCodeInvalidCharacterLiteral,
     ExitCodeUndefinedLabel,
-    ExitCodeUnexpectedLabelAtEndOfFile
+    ExitCodeUnexpectedEndOfFile
 };
 
 #endif

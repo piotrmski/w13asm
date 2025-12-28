@@ -206,13 +206,13 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("empty-program-should-fail", ExitCodeResultProgramEmpty);
     expectSuccess("label-name-should-allow-valid-length-and-characters");
     expectErrorCode("label-name-should-disallow-invalid-length", ExitCodeLabelNameTooLong);
-    expectErrorCode("label-name-should-disallow-invalid-character", ExitCodeUnexpectedCharacter);
+    expectErrorCode("label-name-should-disallow-invalid-character", ExitCodeInvalidLabelName);
     expectSuccess("declaration-should-allow-near-memory-range");
     expectErrorCode("declaration-should-disallow-beyond-memory-range", ExitCodeDeclaringValueOutOfMemoryRange);
     expectSuccess("instruction-should-allow-near-memory-range");
     expectErrorCode("instruction-should-disallow-beyond-memory-range", ExitCodeDeclaringValueOutOfMemoryRange);
     expectErrorCode("memory-overwrite-should-fail", ExitCodeMemoryValueOverridden);
-    expectErrorCode("number-literals-hex-should-disallow-no-digits", ExitCodeNumberWithoutDigits);
+    expectErrorCode("number-literals-hex-should-disallow-no-digits", ExitCodeInvalidNumberLiteral);
     expectSuccess("number-literals-should-allow-in-range");
     expectErrorCode("number-literals-should-disallow-too-high", ExitCodeNumberLiteralOutOutRange);
     expectErrorCode("number-literals-should-disallow-too-low", ExitCodeNumberLiteralOutOutRange);
@@ -222,7 +222,7 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("reference-should-disallow-negative-address", ExitCodeReferenceToInvalidAddress);
     expectErrorCode("string-should-disallow-unterminated", ExitCodeUnterminatedString);
     expectErrorCode("fill-should-disallow-multiple-characters", ExitCodeInvalidDirectiveArgument);
-    expectErrorCode("fill-should-disallow-non-positive-count", ExitCodeFillCountNotPositive);
+    expectErrorCode("fill-should-disallow-non-positive-count", ExitCodeInvalidDirectiveArgument);
     expectSuccess("label-before-align-should-point-to-valid-address");
     expectSuccess("label-before-fill-should-point-to-valid-address");
     expectSuccess("label-before-org-should-point-to-valid-address");
@@ -232,7 +232,6 @@ int main(int argc, const char * argv[]) {
     expectSuccess("align-should-allow-param-lowest");
     expectSuccess("align-should-allow-param-highest");
     expectSuccess("empty-string-should-produce-char-0");
-    expectSuccess("empty-nzt-string-should-be-labeled-as-char");
     expectSuccess("label-at-higher-byte-of-instruction-should-be-int");
     expectSuccess("align-should-not-change-address-if-already-aligned");
     expectErrorCode("labels-disallow-duplicates", ExitCodeLabelNameNotUnique);

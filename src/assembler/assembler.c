@@ -188,7 +188,7 @@ static bool isValidLabelDefinitionRemoveColon(struct Token token, struct Assembl
 
     for (int i = 0; i < token.length; ++i) {
         char ch = token.value[i];
-        bool characterValid = ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || i > 0 && ch >= '0' && ch <= 9;
+        bool characterValid = ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || i > 0 && ch >= '0' && ch <= '9';
         if (!characterValid) {
             printf("Error on line %d: \"%s\" is not a valid label name.\n", token.lineNumber, token.value);
             exit(ExitCodeInvalidLabelName);
@@ -217,7 +217,7 @@ static int parseNumberLiteral(struct Token token) {
 
 static struct LabelUseParseResult parseLabelUse(struct Token token) {
     char* offsetSign = strpbrk(token.value, "+-");
-    int offset;
+    int offset = 0;
     if (offsetSign != NULL) {
         offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, offsetSign });
         *offsetSign = 0;
@@ -313,6 +313,10 @@ static void insertInstruction(struct AssemblerState* state, enum Instruction ins
         } 
         instructionCode |= paramValue;
     } else {
+        if (state->labelUsesCount == MAX_LABEL_USES - 2) {
+            printf("Error on line %d: too many label uses.\n", param.lineNumber);
+            exit(ExitCodeTooManyLabelUses);
+        }
         struct LabelUseParseResult labelUse = parseLabelUse(param);
         state->labelUses[state->labelUsesCount++] =
             (struct LabelUse) { labelUse.name, labelUse.offset, 0, param.lineNumber, state->currentAddress };
@@ -326,7 +330,7 @@ static void insertInstruction(struct AssemblerState* state, enum Instruction ins
 static void updateCurrentAddress(struct AssemblerState* state, int newAddress, int lineNumber, int labelDefinitionsStartIndex) {
     if (newAddress < 0 || newAddress >= ADDRESS_SPACE_SIZE) {
         printf("Error on line %d: attempting to set origin to an invalid address 0x%04X.\n", lineNumber, newAddress);
-        exit(ExitCodeReferenceToInvalidAddress);
+        exit(ExitCodeOriginOutOfMemoryRange);
     }
     state->currentAddress = newAddress;
     for (int i = labelDefinitionsStartIndex; i < state->labelDefinitionsCount; ++i) {
@@ -396,6 +400,10 @@ static void applyLsbOrMsbDirective(struct AssemblerState* state, enum Directive 
     int byte = directive == DirectiveLsb ? 0 : 1;
     assertNoMemoryViolation(state, state->currentAddress, param.lineNumber);
     state->result.dataType[state->currentAddress] = DataTypeInt;
+    if (state->labelUsesCount == MAX_LABEL_USES - 1) {
+        printf("Error on line %d: too many label uses.\n", state->lineNumber);
+        exit(ExitCodeTooManyLabelUses);
+    }
     state->labelUses[state->labelUsesCount++] =
         (struct LabelUse) { labelUse.name, labelUse.offset, byte, param.lineNumber, state->currentAddress };
 }
@@ -407,6 +415,7 @@ static void applyDirective(struct AssemblerState* state, enum Directive directiv
         case DirectiveFill: return applyFillDirective(state);
         case DirectiveLsb:
         case DirectiveMsb: return applyLsbOrMsbDirective(state, directive);
+        case DirectiveInvalid: break;
     }
 }
 
@@ -507,7 +516,7 @@ static void resolveLabels(struct AssemblerState* state) {
         int evaluatedAddress = labelDefinition->address + labelUse->offset;
         
         if (evaluatedAddress < 0 || evaluatedAddress >= ADDRESS_SPACE_SIZE) {
-            printf("Error on line %d: \"%s%s%d\" evaluates to %d, which is an invalid address.\n", labelUse->lineNumber, labelUse->name, labelUse->offset < 0 ? "" : "+", labelUse->offset);
+            printf("Error on line %d: \"%s%s%d\" evaluates to %d, which is an invalid address.\n", labelUse->lineNumber, labelUse->name, labelUse->offset < 0 ? "" : "+", labelUse->offset, evaluatedAddress);
             exit(ExitCodeReferenceToInvalidAddress);
         }
         

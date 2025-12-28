@@ -143,7 +143,7 @@ static bool isStringLiteral(char* tokenValue) {
 }
 
 static bool isNumberLiteral(char* tokenValue) {
-    return tokenValue[0] >= '0' && tokenValue[0] <= '9' || tokenValue[0] == '-' && tokenValue[0] >= '0' && tokenValue[0] <= '9';
+    return tokenValue[0] >= '0' && tokenValue[0] <= '9' || tokenValue[0] == '-' && tokenValue[1] >= '0' && tokenValue[1] <= '9';
 }
 
 static bool isCharacterLiteral(char* tokenValue) {
@@ -274,9 +274,9 @@ static char parseCharacterLiteral(struct Token token) {
 
     int charLength = 1;
     int character = (isNegative ? -1 : 1) * token.value[1];
-    if (character == '\\') {
+    if (token.value[1] == '\\') {
         struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.lineNumber, 0, token.value + 1 });
-        character = parsed.character;
+        character = (isNegative ? -1 : 1) * parsed.character;
         charLength = parsed.length;
     }
 
@@ -372,13 +372,16 @@ static void applyFillDirective(struct AssemblerState* state) {
             printf("Error on line %d: character literal \"%s\" evaluates to %d, which is out of range.\n", valueParam.lineNumber, valueParam.value, value);
             exit(ExitCodeCharacterLiteralOutOutRange);
         }
-    } else {
+    } else if (isNumberLiteral(valueParam.value)) {
         valueToFillType = DataTypeInt;
         value = parseNumberLiteral(valueParam);
         if (value < CHAR_MIN || value > UCHAR_MAX) {
             printf("Error on line %d: number %d is out of range.\n", valueParam.lineNumber, value);
             exit(ExitCodeNumberLiteralOutOutRange);
         }
+    } else {
+        printf("Error on line %d: \"%s\" is neither a character nor a number.\n", valueParam.lineNumber, valueParam.value);
+        exit(ExitCodeInvalidDirectiveArgument);
     }
 
     count = parseNumberLiteral(countParam);
@@ -527,7 +530,7 @@ static void resolveLabels(struct AssemblerState* state) {
             exit(ExitCodeReferenceToInvalidAddress);
         }
         
-        state->result.programMemory[labelUse->address] = evaluatedAddress >> (labelUse->byte * 8);
+        state->result.programMemory[labelUse->address] |= evaluatedAddress >> (labelUse->byte * 8);
     }
 }
 

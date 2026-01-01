@@ -67,7 +67,7 @@ When using a label name as an argument to an instruction or `.LSB` or `.MSB` dir
 
 ## Instructions
 
-Instruction names are case-insensitive. All instructions have one argument - an absolute memory address - which may be expressed as a number between 0 and 8191 in any representation (see Data declaration), or a label name, optionally with an offset.
+Instruction names are case-insensitive. All instructions have one argument - an absolute memory address - which may be expressed as a number between 0 and 8191 in [any representation](#data-declaration), or a label name, optionally with an offset. `LD`, `NOT`, `ADD` and `AND` alternatively accept [immediate value expression](#immediate-value-expressions) for an argument.
 
 Instruction set:
 
@@ -91,7 +91,7 @@ Directive names are case-insensitive.
     - current address is 0x0123, `.ALIGN 8` sets the next address to 0x0200,
     - current address is 0x0100, `.ALIGN 8` sets the next address to 0x0100.
 - `.FILL` followed by two arguments:
-    - value to be filled (a number between -128 and 255 or a character literal, see Data declaration),
+    - value to be filled (a number between -128 and 255 or a [character expression](#data-declaration)),
     - number of words to fill (a number greater than 0).
 - `.LSB` followed by a label name, optionally with an offset. Places in memory the least significant byte of an address that a label evaluates to.
 - `.MSB` followed by a label name, optionally with an offset. Places in memory the most significant byte of an address that a label evaluates to.
@@ -115,6 +115,32 @@ The following escape sequences can be used in strings and characters (they are c
 - `\"` - "
 - `\xNN` - the byte whose numerical value is given by NN interpreted as a hexadecimal number (two hex digits are required)
 - `\\` - \
+
+## Immediate value expressions
+
+In case of `LD`, `NOT`, `ADD` and `AND` instructions a one byte number or a character expression can be used as an immediate value argument, if prefixed by `#`. As a result:
+
+- The value is declared after the last instruction or explicit data declaration,
+- The instruction argument is set to the address of the dynamically declared value.
+
+If multiple immediate value expressions evaluate to the same value, then they all evaluate to the same address.
+
+Example:
+
+```
+LD #-'A'+1
+AND #-64
+ADD #192
+```
+
+Is equivalent to:
+
+```
+LD const192
+AND const192
+ADD const192
+const192: 192
+```
 
 ## Examples
 

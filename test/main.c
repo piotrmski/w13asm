@@ -241,6 +241,13 @@ int main(int argc, const char * argv[]) {
     expectSuccess("lsb-msb-should-allow-offset-within-range");
     expectErrorCode("lsb-msb-should-disallow-offset-too-low", ExitCodeReferenceToInvalidAddress);
     expectErrorCode("lsb-msb-should-disallow-offset-too-high", ExitCodeReferenceToInvalidAddress);
+    expectSuccess("immediate-expr-same-value-should-point-to-same-addr");
+    expectSuccess("immediate-expr-should-allow-within-byte-limit");
+    expectSuccess("immediate-expr-should-allow-near-data-range");
+    expectErrorCode("immediate-expr-should-disallow-beyond-data-range", ExitCodeImmediateValueDeclarationOutOfMemoryRange);
+    expectErrorCode("immediate-expr-should-disallow-st", ExitCodeInvalidInstructionArgument);
+    expectErrorCode("immediate-expr-should-disallow-too-high", ExitCodeCharacterLiteralOutOutRange);
+    expectErrorCode("immediate-expr-should-disallow-too-low", ExitCodeCharacterLiteralOutOutRange);
 
     printf("Tests passed: %d\nTests failed: %d\n", testResults.passed, testResults.failed);
 }

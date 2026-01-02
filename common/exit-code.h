@@ -22,11 +22,13 @@ enum ExitCode {
     ExitCodeTooManyLabelUses,
     ExitCodeReferenceToInvalidAddress,
     ExitCodeOriginOutOfMemoryRange,
+    ExitCodeInvalidInstructionArgument,
     ExitCodeInvalidDirectiveArgument,
     ExitCodeInvalidToken,
     ExitCodeInvalidCharacterLiteral,
     ExitCodeUndefinedLabel,
-    ExitCodeUnexpectedEndOfFile
+    ExitCodeUnexpectedEndOfFile,
+    ExitCodeImmediateValueDeclarationOutOfMemoryRange
 };
 
 #endif

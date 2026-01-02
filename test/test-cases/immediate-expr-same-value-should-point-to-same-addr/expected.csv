@@ -1,0 +1,4 @@
+0x0000,instruction,
+0x0002,instruction,
+0x0004,instruction,
+0x0006,char,#-'A'+1

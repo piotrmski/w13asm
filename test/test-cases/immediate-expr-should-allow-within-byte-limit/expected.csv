@@ -1,0 +1,6 @@
+0x0000,instruction,
+0x0002,instruction,
+0x0004,instruction,
+0x0006,instruction,
+0x0008,char,#-'A'-63
+0x0009,char,#'z'+0x85

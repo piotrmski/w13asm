@@ -1,0 +1,5 @@
+0x0000,instruction,
+0x0002,instruction,
+0x1FFD,char,
+0x1FFE,int,#1
+0x1FFF,char,#2

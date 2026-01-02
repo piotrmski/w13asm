@@ -6,18 +6,18 @@ st character
 jmz loop
 
 ; if character == '\n' (10) then end
-add constNegativeLF
+add #-'\n'
 jmz onReturn
-add constLF
+add #'\n'
 
 ; if not character < 'a' (97) and character < 'z'+1 (123) then print character - 32; else print character
-add constNegativea
+add #-'a'
 jmn echo
-add consta 
+add #'a' 
 
-add constNegativezMinus1
+add #-'z'-1
 jmn capitalize
-add constzPlus1 
+add #'z'+1 
 
 echo:
 ld character
@@ -26,7 +26,7 @@ jmp loop
 
 capitalize:
 ld character
-add constNegative32
+add #32
 st IO
 jmp loop
 
@@ -36,14 +36,6 @@ st IO
 
 end: jmp end
 
-character:            ' '
-const1:               1
-constNegativeLF:      -'\n'
-constLF:              '\n'
-constNegativea:       -'a'
-consta:               'a'
-constNegativezMinus1: -'z'-1
-constzPlus1:          'z'+1
-constNegative32:      -0x20
+character: ' '
 
 IO: .org 0x1fff

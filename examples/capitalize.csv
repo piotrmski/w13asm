@@ -21,4 +21,11 @@
 0x0028,instruction,
 0x002A,instruction,end
 0x002C,char,character
+0x002D,char,#-'\n'
+0x002E,char,#'\n'
+0x002F,char,#-'a'
+0x0030,char,#'a'
+0x0031,char,#-'z'-1
+0x0032,char,#'z'+1
+0x0033,int,#32
 0x1FFF,char,IO

@@ -9,7 +9,7 @@
 #include <errno.h>
 
 #define MAX_LABEL_DEFS 0x1000
-#define MAX_LABEL_USES 0x1000
+#define MAX_LABEL_USES 0x2000
 #define MAX_IMMEDIATE_VAL_USES 0x1000
 #define MAX_LABEL_NAME_LEN_INCL_0 0x20
 
@@ -34,9 +34,14 @@ enum Directive {
     DirectiveInvalid
 };
 
+enum NumberLiteralRange {
+    NumberLiteralRangeNone,
+    NumberLiteralRangeByte,
+    NumberLiteralRangeAddress
+};
+
 struct LabelDefinition {
     char* name;
-    int lineNumber;
     int address;
 };
 
@@ -49,8 +54,7 @@ struct LabelUse {
 };
 
 struct ImmediateValueUse {
-    char* stringValue;
-    int lineNumber;
+    struct Token token;
     int address;
 };
 
@@ -88,6 +92,27 @@ static void assertNoMemoryViolation(int address, int lineNumber) {
     }
 
     programMemoryWritten[address] = true;
+}
+
+static void assertCanAddLabelDefinition(int lineNumber) {
+    if (labelDefinitionsCount == MAX_LABEL_DEFS - 1) {
+        printf("Error on line %d: too many label definitions.\n", lineNumber);
+        exit(ExitCodeTooManyLabelDefinitions);
+    }
+}
+
+static void assertCanAddLabelUses(int count, int lineNumber) {
+    if (labelUsesCount == MAX_LABEL_USES - count) {
+        printf("Error on line %d: too many label uses.\n", lineNumber);
+        exit(ExitCodeTooManyLabelUses);
+    }
+}
+
+static void assertCanAddImmediateValue(int lineNumber) {
+    if (immediateValueUsesCount == MAX_IMMEDIATE_VAL_USES - 1) {
+        printf("Error on line %d: too many immediate value uses.\n", lineNumber);
+        exit(ExitCodeTooManyImmediateValueUses);
+    }
 }
 
 static char charUppercase(char ch) {
@@ -234,12 +259,25 @@ static bool isValidLabelDefinitionRemoveColon(struct Token token) {
     return true;
 }
 
-static int parseNumberLiteral(struct Token token) {
+static int parseNumberLiteral(struct Token token, enum NumberLiteralRange range) {
     char* endChar;
     int result = strtol(token.value, &endChar, 0);
+
     if (errno  != 0 || *endChar != 0) {
         printf("Error on line %d: \"%s\" is not a valid number.\n", token.lineNumber, token.value);
         exit(ExitCodeInvalidNumberLiteral);
+    }
+
+    if (range == NumberLiteralRangeByte) {
+        if (result < CHAR_MIN || result > UCHAR_MAX) {
+            printf("Error on line %d: number %d is out of range.\n", token.lineNumber, result);
+            exit(ExitCodeNumberLiteralOutOutRange);
+        }
+    } else if (range == NumberLiteralRangeAddress) {
+        if (result < 0 || result >= ADDRESS_SPACE_SIZE) {
+            printf("Error on line %d: attempting to reference invalid address 0x%04X.\n", token.lineNumber, result);
+            exit(ExitCodeReferenceToInvalidAddress);
+        } 
     }
     return result;
 }
@@ -248,7 +286,7 @@ static struct LabelUseParseResult parseLabelUse(struct Token token) {
     char* offsetSign = strpbrk(token.value, "+-");
     int offset = 0;
     if (offsetSign != NULL) {
-        offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, offsetSign });
+        offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, offsetSign }, NumberLiteralRangeNone);
         *offsetSign = 0;
     }
     return (struct LabelUseParseResult) { token.value, offset };
@@ -284,7 +322,7 @@ static struct EscapeSequenceParseResult parseEscapeSequence(struct Token token) 
             char numberString[5] = "0x00";
             numberString[2] = token.value[2];
             numberString[3] = token.value[3];
-            unsigned char number = parseNumberLiteral((struct Token) { token.lineNumber, 5, numberString });
+            unsigned char number = parseNumberLiteral((struct Token) { token.lineNumber, 5, numberString }, NumberLiteralRangeNone);
             return (struct EscapeSequenceParseResult) { number, 4 };
         default:
             printf("Error on line %d: invalid escape sequence \"\\%c\".\n", token.lineNumber, token.value[1]);
@@ -292,7 +330,7 @@ static struct EscapeSequenceParseResult parseEscapeSequence(struct Token token) 
     }
 }
 
-static int parseCharacterLiteral(struct Token token) {
+static unsigned char parseCharacterLiteral(struct Token token) {
     char* fullTokenValue = token.value;
 
     bool isNegative = token.value[0] == '-';
@@ -322,8 +360,15 @@ static int parseCharacterLiteral(struct Token token) {
         return character;
     }
 
-    int offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, token.value + charLength + 2 });
-    return character + offset;
+    int offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, token.value + charLength + 2 }, NumberLiteralRangeNone);
+    int result = character + offset;
+
+    if (result < CHAR_MIN || result > UCHAR_MAX) {
+        printf("Error on line %d: character literal \"%s\" evaluates to %d, which is out of range.\n", token.lineNumber, token.value, result);
+        exit(ExitCodeCharacterLiteralOutOutRange);
+    }
+
+    return result;
  }
 
 static void insertInstruction(enum Instruction instruction) {
@@ -335,32 +380,22 @@ static void insertInstruction(enum Instruction instruction) {
     struct Token param = getNextNonEmptyToken();
 
     if (isNumberLiteral(param.value)) {
-        int paramValue = parseNumberLiteral(param);
-        if (paramValue < 0 || paramValue >= ADDRESS_SPACE_SIZE) {
-            printf("Error on line %d: attempting to reference invalid address 0x%04X.\n", param.lineNumber, paramValue);
-            exit(ExitCodeReferenceToInvalidAddress);
-        } 
+        int paramValue = parseNumberLiteral(param, NumberLiteralRangeAddress);
         instructionCode |= paramValue;
     } else if (!isImmediateValue(param.value)) {
-        if (labelUsesCount == MAX_LABEL_USES - 2) {
-            printf("Error on line %d: too many label uses.\n", param.lineNumber);
-            exit(ExitCodeTooManyLabelUses);
-        }
+        assertCanAddLabelUses(2, param.lineNumber);
         struct LabelUseParseResult labelUse = parseLabelUse(param);
         labelUses[labelUsesCount++] =
             (struct LabelUse) { labelUse.name, labelUse.offset, 0, param.lineNumber, currentAddress };
         labelUses[labelUsesCount++] =
             (struct LabelUse) { labelUse.name, labelUse.offset, 1, param.lineNumber, currentAddress + 1 };
     } else {
-        if (immediateValueUsesCount == MAX_IMMEDIATE_VAL_USES - 1) {
-            printf("Error on line %d: too many immediate value uses.\n", param.lineNumber);
-            exit(ExitCodeTooManyImmediateValueUses);
-        }
+        assertCanAddImmediateValue(param.lineNumber);
         if (!instructionAcceptsImmediateValue(instruction)) {
             printf("Error on line %d: instruction \"%s\" does not accept an immediate value as an argument.\n", param.lineNumber, getInstructionName(instruction));
             exit(ExitCodeInvalidInstructionArgument);
         }
-        immediateValueUses[immediateValueUsesCount++] = (struct ImmediateValueUse) { param.value + 1, param.lineNumber, currentAddress };
+        immediateValueUses[immediateValueUsesCount++] = (struct ImmediateValueUse) { param, currentAddress };
     }
     result.programMemory[currentAddress++] = instructionCode;
     result.programMemory[currentAddress++] = instructionCode >> 8;
@@ -379,13 +414,13 @@ static void updateCurrentAddress(int newAddress, int lineNumber, int labelDefini
 
 static void applyOrgDirective(int labelDefinitionsStartIndex) {
     struct Token param = getNextNonEmptyToken();
-    int paramValue = parseNumberLiteral(param);
+    int paramValue = parseNumberLiteral(param, NumberLiteralRangeNone);
     updateCurrentAddress(paramValue, param.lineNumber, labelDefinitionsStartIndex);
 }
 
 static void applyAlignDirective(int labelDefinitionsStartIndex) {
     struct Token param = getNextNonEmptyToken();
-    int paramValue = parseNumberLiteral(param);
+    int paramValue = parseNumberLiteral(param, NumberLiteralRangeNone);
     if (paramValue < 1 || paramValue > 12) {
         printf("Error on line %d: invalid align argument \"%d\". Must be between 1 and 12.\n", param.lineNumber, paramValue);
         exit(ExitCodeInvalidDirectiveArgument);
@@ -401,29 +436,21 @@ static void applyFillDirective() {
     struct Token valueParam = getNextNonEmptyToken();
     struct Token countParam = getNextNonEmptyToken();
 
-    int value, count;
+    unsigned char value, count;
     enum DataType valueToFillType;
     
     if (isCharacterLiteral(valueParam.value)) {
         valueToFillType = DataTypeChar;
         value = parseCharacterLiteral(valueParam);
-        if (value < CHAR_MIN || value > UCHAR_MAX) {
-            printf("Error on line %d: character literal \"%s\" evaluates to %d, which is out of range.\n", valueParam.lineNumber, valueParam.value, value);
-            exit(ExitCodeCharacterLiteralOutOutRange);
-        }
     } else if (isNumberLiteral(valueParam.value)) {
         valueToFillType = DataTypeInt;
-        value = parseNumberLiteral(valueParam);
-        if (value < CHAR_MIN || value > UCHAR_MAX) {
-            printf("Error on line %d: number %d is out of range.\n", valueParam.lineNumber, value);
-            exit(ExitCodeNumberLiteralOutOutRange);
-        }
+        value = parseNumberLiteral(valueParam, NumberLiteralRangeByte);
     } else {
         printf("Error on line %d: \"%s\" is neither a character nor a number.\n", valueParam.lineNumber, valueParam.value);
         exit(ExitCodeInvalidDirectiveArgument);
     }
 
-    count = parseNumberLiteral(countParam);
+    count = parseNumberLiteral(countParam, NumberLiteralRangeNone);
     if (count < 1) {
         printf("Error on line %d: fill count must be positive.\n", countParam.lineNumber);
         exit(ExitCodeInvalidDirectiveArgument);
@@ -442,10 +469,7 @@ static void applyLsbOrMsbDirective(enum Directive directive) {
     int byte = directive == DirectiveLsb ? 0 : 1;
     assertNoMemoryViolation(currentAddress, param.lineNumber);
     result.dataType[currentAddress] = DataTypeInt;
-    if (labelUsesCount == MAX_LABEL_USES - 1) {
-        printf("Error on line %d: too many label uses.\n", lineNumber);
-        exit(ExitCodeTooManyLabelUses);
-    }
+    assertCanAddLabelUses(1, param.lineNumber);
     labelUses[labelUsesCount++] =
         (struct LabelUse) { labelUse.name, labelUse.offset, byte, param.lineNumber, currentAddress++ };
 }
@@ -479,25 +503,15 @@ static void declareString(struct Token token) {
 }
 
 static void declareNumber(struct Token token) {
-    assertNoMemoryViolation(currentAddress, lineNumber);
+    assertNoMemoryViolation(currentAddress, token.lineNumber);
     result.dataType[currentAddress] = DataTypeInt;
-    int number = parseNumberLiteral(token);
-    if (number < CHAR_MIN || number > UCHAR_MAX) {
-        printf("Error on line %d: number %d is out of range.\n", token.lineNumber, number);
-        exit(ExitCodeNumberLiteralOutOutRange);
-    }
-    result.programMemory[currentAddress++] = number;
+    result.programMemory[currentAddress++] = parseNumberLiteral(token, NumberLiteralRangeByte);
 }
 
 static void declareCharacter(struct Token token) {
-    assertNoMemoryViolation(currentAddress, lineNumber);
+    assertNoMemoryViolation(currentAddress, token.lineNumber);
     result.dataType[currentAddress] = DataTypeChar;
-    int number = parseCharacterLiteral(token);
-    if (number < CHAR_MIN || number > UCHAR_MAX) {
-        printf("Error on line %d: character literal \"%s\" evaluates to %d, which is out of range.\n", token.lineNumber, token.value, number);
-        exit(ExitCodeCharacterLiteralOutOutRange);
-    }
-    result.programMemory[currentAddress++] = number;
+    result.programMemory[currentAddress++] = parseCharacterLiteral(token);
 }
 
 static struct Token parseLabelDefinitionsGetNextToken() {
@@ -506,11 +520,8 @@ static struct Token parseLabelDefinitionsGetNextToken() {
     while (true) {
         token = getNextToken();
         if (token.value != NULL && isValidLabelDefinitionRemoveColon(token)) {
-            if (labelDefinitionsCount == MAX_LABEL_DEFS - 1) {
-                printf("Error on line %d: too many label definitions.\n", token.lineNumber);
-                exit(ExitCodeTooManyLabelDefinitions);
-            }
-            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, token.lineNumber, currentAddress };
+            assertCanAddLabelDefinition(token.lineNumber);
+            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, currentAddress };
         } else {
             break;
         }
@@ -554,6 +565,44 @@ static bool parseStatement() {
     return true;
 }
 
+static void resolveImmediateValues() {
+    char* labelNamesByImmediateValue[256] = { NULL };
+
+    for (int i = 0; i < ADDRESS_SPACE_SIZE; ++i) {
+        if (programMemoryWritten[i]) {
+            currentAddress = i + 1;
+        }
+    }
+
+    for (int i = 0; i < immediateValueUsesCount; ++i) {
+        struct Token token = immediateValueUses[i].token;
+        struct Token valueToken = (struct Token) { token.lineNumber, token.length - 1, token.value + 1 };
+
+        unsigned char value = isCharacterLiteral(valueToken.value)
+            ? parseCharacterLiteral(valueToken)
+            : parseNumberLiteral(valueToken, NumberLiteralRangeByte);
+        enum DataType dataType = isCharacterLiteral(valueToken.value) ? DataTypeChar : DataTypeInt;
+        
+        if (labelNamesByImmediateValue[value] == NULL) {
+            if (currentAddress >= ADDRESS_SPACE_SIZE) {
+                printf("Error on line %d: can't add immediate values after the last explicit value declaration due to insufficient space.\n", lineNumber);
+                exit(ExitCodeImmediateValueDeclarationOutOfMemoryRange);
+            }
+            assertCanAddLabelDefinition(token.lineNumber);
+            labelNamesByImmediateValue[value] = token.value;
+            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, currentAddress };
+            result.dataType[currentAddress] = dataType;
+            result.programMemory[currentAddress++] = value;
+        }
+
+        assertCanAddLabelUses(2, token.lineNumber);
+        labelUses[labelUsesCount++] =
+            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 0, token.lineNumber, immediateValueUses[i].address };
+        labelUses[labelUsesCount++] =
+            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 1, token.lineNumber, immediateValueUses[i].address + 1 };
+    }
+}
+
 static void resolveLabels() {
     for (int i = labelDefinitionsCount - 1; i >= 0; --i) {
         result.labelNameByAddress[labelDefinitions[i].address] = labelDefinitions[i].name;
@@ -578,6 +627,7 @@ struct AssemblerResult assemble(char* source) {
 
     while (parseStatement()) {}
 
+    resolveImmediateValues();
     resolveLabels();
 
     return result;

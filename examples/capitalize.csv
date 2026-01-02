@@ -21,12 +21,4 @@
 0x0028,instruction,
 0x002A,instruction,end
 0x002C,char,character
-0x002D,int,const1
-0x002E,char,constNegativeLF
-0x002F,char,constLF
-0x0030,char,constNegativea
-0x0031,char,consta
-0x0032,char,constNegativezMinus1
-0x0033,char,constzPlus1
-0x0034,int,constNegative32
 0x1FFF,char,IO

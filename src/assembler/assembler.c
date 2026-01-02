@@ -8,8 +8,9 @@
 #include <limits.h>
 #include <errno.h>
 
-#define MAX_LABEL_DEFS 0x800
-#define MAX_LABEL_USES 0x2000
+#define MAX_LABEL_DEFS 0x1000
+#define MAX_LABEL_USES 0x1000
+#define MAX_IMMEDIATE_VAL_USES 0x1000
 #define MAX_LABEL_NAME_LEN_INCL_0 0x20
 
 enum Instruction {
@@ -47,6 +48,12 @@ struct LabelUse {
     int address;
 };
 
+struct ImmediateValueUse {
+    char* stringValue;
+    int lineNumber;
+    int address;
+};
+
 struct LabelUseParseResult {
     char* name;
     int offset;
@@ -57,30 +64,30 @@ struct EscapeSequenceParseResult {
     int length;
 };
 
-struct AssemblerState {
-    char* source;
-    int lineNumber;
-    int currentAddress;
-    bool programMemoryWritten[ADDRESS_SPACE_SIZE];
-    struct LabelDefinition labelDefinitions[MAX_LABEL_DEFS];
-    int labelDefinitionsCount;
-    struct LabelUse labelUses[MAX_LABEL_USES];
-    int labelUsesCount;
-    struct AssemblerResult result;
-};
+static char* sourceString;
+static int lineNumber = 1;
+static int currentAddress = 0;
+static bool programMemoryWritten[ADDRESS_SPACE_SIZE] = { false };
+static struct LabelDefinition labelDefinitions[MAX_LABEL_DEFS];
+static int labelDefinitionsCount = 0;
+static struct LabelUse labelUses[MAX_LABEL_USES];
+static int labelUsesCount = 0;
+static struct ImmediateValueUse immediateValueUses[MAX_IMMEDIATE_VAL_USES];
+static int immediateValueUsesCount = 0;
+static struct AssemblerResult result = (struct AssemblerResult){ { 0 }, { DataTypeNone }, { NULL } };
 
-static void assertNoMemoryViolation(struct AssemblerState* state, int address, int lineNumber) {
+static void assertNoMemoryViolation(int address, int lineNumber) {
     if (address < 0 || address >= ADDRESS_SPACE_SIZE) {
         printf("Error on line %d: attempting to declare memory value outside of address space.\n", lineNumber);
         exit(ExitCodeDeclaringValueOutOfMemoryRange);
     }
 
-    if (state->programMemoryWritten[address]) {
+    if (programMemoryWritten[address]) {
         printf("Error on line %d: attempting to override memory value.\n", lineNumber);
         exit(ExitCodeMemoryValueOverridden);
     }
 
-    state->programMemoryWritten[address] = true;
+    programMemoryWritten[address] = true;
 }
 
 static char charUppercase(char ch) {
@@ -122,6 +129,20 @@ static enum Instruction getInstruction(char* name) {
     }
 }
 
+static const char* getInstructionName(enum Instruction instruction) {
+    switch (instruction) {
+        case InstructionLd: return "LD"; 
+        case InstructionNot: return "NOT"; 
+        case InstructionAdd: return "ADD"; 
+        case InstructionAnd: return "AND"; 
+        case InstructionSt: return "ST"; 
+        case InstructionJmp: return "JMP"; 
+        case InstructionJmn: return "JMN"; 
+        case InstructionJmz: return "JMZ"; 
+        case InstructionInvalid: return "";
+    }
+}
+
 static enum Directive getDirective(char* name) {
     if (stringsEqualCaseInsensitive(name, ".ORG")) {
         return DirectiveOrg;
@@ -150,10 +171,18 @@ static bool isCharacterLiteral(char* tokenValue) {
     return tokenValue[0] == '\'' || tokenValue[0] == '-' && tokenValue[1] == '\'';
 }
 
-struct LabelDefinition* findLabelDefinition(struct AssemblerState* state, struct LabelUse* labelUse) {
-    for (int i = 0; i < state->labelDefinitionsCount; ++i) {
-        if (strcmp(state->labelDefinitions[i].name, labelUse->name) == 0) {
-            return &state->labelDefinitions[i];
+static bool isImmediateValue(char* tokenValue) {
+    return tokenValue[0] == '#';
+}
+
+static bool instructionAcceptsImmediateValue(enum Instruction instruction) {
+    return instruction < InstructionSt;
+}
+
+struct LabelDefinition* findLabelDefinition(struct LabelUse* labelUse) {
+    for (int i = 0; i < labelDefinitionsCount; ++i) {
+        if (strcmp(labelDefinitions[i].name, labelUse->name) == 0) {
+            return &labelDefinitions[i];
         }
     }
 
@@ -161,20 +190,20 @@ struct LabelDefinition* findLabelDefinition(struct AssemblerState* state, struct
     exit(ExitCodeUndefinedLabel);
 }
 
-static struct Token getNextToken(struct AssemblerState* state) {
-    return getToken(&state->source, &state->lineNumber);
+static struct Token getNextToken() {
+    return getToken(&sourceString, &lineNumber);
 }
 
-static struct Token getNextNonEmptyToken(struct AssemblerState* state) {
-    struct Token result = getNextToken(state);
+static struct Token getNextNonEmptyToken() {
+    struct Token result = getNextToken();
     if (result.value == NULL) {
-        printf("Error on line %d: unexpected end of file.\n", state->lineNumber);
+        printf("Error on line %d: unexpected end of file.\n", lineNumber);
         exit(ExitCodeUnexpectedEndOfFile);
     }
     return result;
 }
 
-static bool isValidLabelDefinitionRemoveColon(struct Token token, struct AssemblerState* state) {
+static bool isValidLabelDefinitionRemoveColon(struct Token token) {
     if (token.value[--token.length] != ':') {
         return false;
     }
@@ -195,8 +224,8 @@ static bool isValidLabelDefinitionRemoveColon(struct Token token, struct Assembl
         }
     }
 
-    for (int i = 0; i < state->labelDefinitionsCount; ++i) {
-        if (strcmp(state->labelDefinitions[i].name, token.value) == 0) {
+    for (int i = 0; i < labelDefinitionsCount; ++i) {
+        if (strcmp(labelDefinitions[i].name, token.value) == 0) {
             printf("Error on line %d: label name \"%s\" is not unique.\n", token.lineNumber, token.value);
             exit(ExitCodeLabelNameNotUnique);
         }
@@ -297,13 +326,13 @@ static int parseCharacterLiteral(struct Token token) {
     return character + offset;
  }
 
-static void insertInstruction(struct AssemblerState* state, enum Instruction instruction) {
-    assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
-    assertNoMemoryViolation(state, state->currentAddress + 1, state->lineNumber);
-    state->result.dataType[state->currentAddress] = DataTypeInstruction;
+static void insertInstruction(enum Instruction instruction) {
+    assertNoMemoryViolation(currentAddress, lineNumber);
+    assertNoMemoryViolation(currentAddress + 1, lineNumber);
+    result.dataType[currentAddress] = DataTypeInstruction;
 
     unsigned short instructionCode = instruction << 13;
-    struct Token param = getNextNonEmptyToken(state);
+    struct Token param = getNextNonEmptyToken();
 
     if (isNumberLiteral(param.value)) {
         int paramValue = parseNumberLiteral(param);
@@ -312,55 +341,65 @@ static void insertInstruction(struct AssemblerState* state, enum Instruction ins
             exit(ExitCodeReferenceToInvalidAddress);
         } 
         instructionCode |= paramValue;
-    } else {
-        if (state->labelUsesCount == MAX_LABEL_USES - 2) {
+    } else if (!isImmediateValue(param.value)) {
+        if (labelUsesCount == MAX_LABEL_USES - 2) {
             printf("Error on line %d: too many label uses.\n", param.lineNumber);
             exit(ExitCodeTooManyLabelUses);
         }
         struct LabelUseParseResult labelUse = parseLabelUse(param);
-        state->labelUses[state->labelUsesCount++] =
-            (struct LabelUse) { labelUse.name, labelUse.offset, 0, param.lineNumber, state->currentAddress };
-        state->labelUses[state->labelUsesCount++] =
-            (struct LabelUse) { labelUse.name, labelUse.offset, 1, param.lineNumber, state->currentAddress + 1 };
+        labelUses[labelUsesCount++] =
+            (struct LabelUse) { labelUse.name, labelUse.offset, 0, param.lineNumber, currentAddress };
+        labelUses[labelUsesCount++] =
+            (struct LabelUse) { labelUse.name, labelUse.offset, 1, param.lineNumber, currentAddress + 1 };
+    } else {
+        if (immediateValueUsesCount == MAX_IMMEDIATE_VAL_USES - 1) {
+            printf("Error on line %d: too many immediate value uses.\n", param.lineNumber);
+            exit(ExitCodeTooManyImmediateValueUses);
+        }
+        if (!instructionAcceptsImmediateValue(instruction)) {
+            printf("Error on line %d: instruction \"%s\" does not accept an immediate value as an argument.\n", param.lineNumber, getInstructionName(instruction));
+            exit(ExitCodeInvalidInstructionArgument);
+        }
+        immediateValueUses[immediateValueUsesCount++] = (struct ImmediateValueUse) { param.value + 1, param.lineNumber, currentAddress };
     }
-    state->result.programMemory[state->currentAddress++] = instructionCode;
-    state->result.programMemory[state->currentAddress++] = instructionCode >> 8;
+    result.programMemory[currentAddress++] = instructionCode;
+    result.programMemory[currentAddress++] = instructionCode >> 8;
 }
 
-static void updateCurrentAddress(struct AssemblerState* state, int newAddress, int lineNumber, int labelDefinitionsStartIndex) {
+static void updateCurrentAddress(int newAddress, int lineNumber, int labelDefinitionsStartIndex) {
     if (newAddress < 0 || newAddress >= ADDRESS_SPACE_SIZE) {
         printf("Error on line %d: attempting to set origin to an invalid address 0x%04X.\n", lineNumber, newAddress);
         exit(ExitCodeOriginOutOfMemoryRange);
     }
-    state->currentAddress = newAddress;
-    for (int i = labelDefinitionsStartIndex; i < state->labelDefinitionsCount; ++i) {
-        state->labelDefinitions[i].address = newAddress;
+    currentAddress = newAddress;
+    for (int i = labelDefinitionsStartIndex; i < labelDefinitionsCount; ++i) {
+        labelDefinitions[i].address = newAddress;
     }
 }
 
-static void applyOrgDirective(struct AssemblerState* state, int labelDefinitionsStartIndex) {
-    struct Token param = getNextNonEmptyToken(state);
+static void applyOrgDirective(int labelDefinitionsStartIndex) {
+    struct Token param = getNextNonEmptyToken();
     int paramValue = parseNumberLiteral(param);
-    updateCurrentAddress(state, paramValue, param.lineNumber, labelDefinitionsStartIndex);
+    updateCurrentAddress(paramValue, param.lineNumber, labelDefinitionsStartIndex);
 }
 
-static void applyAlignDirective(struct AssemblerState* state, int labelDefinitionsStartIndex) {
-    struct Token param = getNextNonEmptyToken(state);
+static void applyAlignDirective(int labelDefinitionsStartIndex) {
+    struct Token param = getNextNonEmptyToken();
     int paramValue = parseNumberLiteral(param);
     if (paramValue < 1 || paramValue > 12) {
         printf("Error on line %d: invalid align argument \"%d\". Must be between 1 and 12.\n", param.lineNumber, paramValue);
         exit(ExitCodeInvalidDirectiveArgument);
     }
     unsigned short bitsToReset = (1 << paramValue) - 1;
-    int newAddress = (state->currentAddress & bitsToReset) == 0
-        ? state->currentAddress
-        : ((state->currentAddress & ~bitsToReset) + bitsToReset + 1);
-    updateCurrentAddress(state, newAddress, param.lineNumber, labelDefinitionsStartIndex);
+    int newAddress = (currentAddress & bitsToReset) == 0
+        ? currentAddress
+        : ((currentAddress & ~bitsToReset) + bitsToReset + 1);
+    updateCurrentAddress(newAddress, param.lineNumber, labelDefinitionsStartIndex);
 }
 
-static void applyFillDirective(struct AssemblerState* state) {
-    struct Token valueParam = getNextNonEmptyToken(state);
-    struct Token countParam = getNextNonEmptyToken(state);
+static void applyFillDirective() {
+    struct Token valueParam = getNextNonEmptyToken();
+    struct Token countParam = getNextNonEmptyToken();
 
     int value, count;
     enum DataType valueToFillType;
@@ -391,87 +430,87 @@ static void applyFillDirective(struct AssemblerState* state) {
     }
 
     for (int i = 0; i < count; ++i) {
-        assertNoMemoryViolation(state, state->currentAddress, countParam.lineNumber);
-        state->result.dataType[state->currentAddress] = valueToFillType;
-        state->result.programMemory[state->currentAddress++] = value;
+        assertNoMemoryViolation(currentAddress, countParam.lineNumber);
+        result.dataType[currentAddress] = valueToFillType;
+        result.programMemory[currentAddress++] = value;
     }
 }
 
-static void applyLsbOrMsbDirective(struct AssemblerState* state, enum Directive directive) {
-    struct Token param = getNextNonEmptyToken(state);
+static void applyLsbOrMsbDirective(enum Directive directive) {
+    struct Token param = getNextNonEmptyToken();
     struct LabelUseParseResult labelUse = parseLabelUse(param);
     int byte = directive == DirectiveLsb ? 0 : 1;
-    assertNoMemoryViolation(state, state->currentAddress, param.lineNumber);
-    state->result.dataType[state->currentAddress] = DataTypeInt;
-    if (state->labelUsesCount == MAX_LABEL_USES - 1) {
-        printf("Error on line %d: too many label uses.\n", state->lineNumber);
+    assertNoMemoryViolation(currentAddress, param.lineNumber);
+    result.dataType[currentAddress] = DataTypeInt;
+    if (labelUsesCount == MAX_LABEL_USES - 1) {
+        printf("Error on line %d: too many label uses.\n", lineNumber);
         exit(ExitCodeTooManyLabelUses);
     }
-    state->labelUses[state->labelUsesCount++] =
-        (struct LabelUse) { labelUse.name, labelUse.offset, byte, param.lineNumber, state->currentAddress++ };
+    labelUses[labelUsesCount++] =
+        (struct LabelUse) { labelUse.name, labelUse.offset, byte, param.lineNumber, currentAddress++ };
 }
 
-static void applyDirective(struct AssemblerState* state, enum Directive directive, int labelDefinitionsStartIndex) {
+static void applyDirective(enum Directive directive, int labelDefinitionsStartIndex) {
     switch (directive) {
-        case DirectiveOrg: return applyOrgDirective(state, labelDefinitionsStartIndex);
-        case DirectiveAlign: return applyAlignDirective(state, labelDefinitionsStartIndex);
-        case DirectiveFill: return applyFillDirective(state);
+        case DirectiveOrg: return applyOrgDirective(labelDefinitionsStartIndex);
+        case DirectiveAlign: return applyAlignDirective(labelDefinitionsStartIndex);
+        case DirectiveFill: return applyFillDirective();
         case DirectiveLsb:
-        case DirectiveMsb: return applyLsbOrMsbDirective(state, directive);
+        case DirectiveMsb: return applyLsbOrMsbDirective(directive);
         case DirectiveInvalid: break;
     }
 }
 
-static void declareString(struct AssemblerState* state, struct Token token) {
+static void declareString(struct Token token) {
     for (int i = 1; i < token.length - 1; ++i) {
-        assertNoMemoryViolation(state, state->currentAddress, token.lineNumber);
-        state->result.dataType[state->currentAddress] = DataTypeChar;
+        assertNoMemoryViolation(currentAddress, token.lineNumber);
+        result.dataType[currentAddress] = DataTypeChar;
         if (token.value[i] == '\\') {
             struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.length, 0, token.value + i });
-            state->result.programMemory[state->currentAddress++] = parsed.character;
+            result.programMemory[currentAddress++] = parsed.character;
             i += parsed.length - 1;
         } else {
-            state->result.programMemory[state->currentAddress++] = token.value[i];
+            result.programMemory[currentAddress++] = token.value[i];
         }
     }
-    assertNoMemoryViolation(state, state->currentAddress, token.lineNumber);
-    state->result.dataType[state->currentAddress] = DataTypeChar;
-    state->result.programMemory[state->currentAddress++] = 0;
+    assertNoMemoryViolation(currentAddress, token.lineNumber);
+    result.dataType[currentAddress] = DataTypeChar;
+    result.programMemory[currentAddress++] = 0;
 }
 
-static void declareNumber(struct AssemblerState* state, struct Token token) {
-    assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
-    state->result.dataType[state->currentAddress] = DataTypeInt;
+static void declareNumber(struct Token token) {
+    assertNoMemoryViolation(currentAddress, lineNumber);
+    result.dataType[currentAddress] = DataTypeInt;
     int number = parseNumberLiteral(token);
     if (number < CHAR_MIN || number > UCHAR_MAX) {
         printf("Error on line %d: number %d is out of range.\n", token.lineNumber, number);
         exit(ExitCodeNumberLiteralOutOutRange);
     }
-    state->result.programMemory[state->currentAddress++] = number;
+    result.programMemory[currentAddress++] = number;
 }
 
-static void declareCharacter(struct AssemblerState* state, struct Token token) {
-    assertNoMemoryViolation(state, state->currentAddress, state->lineNumber);
-    state->result.dataType[state->currentAddress] = DataTypeChar;
+static void declareCharacter(struct Token token) {
+    assertNoMemoryViolation(currentAddress, lineNumber);
+    result.dataType[currentAddress] = DataTypeChar;
     int number = parseCharacterLiteral(token);
     if (number < CHAR_MIN || number > UCHAR_MAX) {
         printf("Error on line %d: character literal \"%s\" evaluates to %d, which is out of range.\n", token.lineNumber, token.value, number);
         exit(ExitCodeCharacterLiteralOutOutRange);
     }
-    state->result.programMemory[state->currentAddress++] = number;
+    result.programMemory[currentAddress++] = number;
 }
 
-static struct Token parseLabelDefinitionsGetNextToken(struct AssemblerState* state) {
+static struct Token parseLabelDefinitionsGetNextToken() {
     struct Token token;
 
     while (true) {
-        token = getNextToken(state);
-        if (token.value != NULL && isValidLabelDefinitionRemoveColon(token, state)) {
-            if (state->labelDefinitionsCount == MAX_LABEL_DEFS - 1) {
+        token = getNextToken();
+        if (token.value != NULL && isValidLabelDefinitionRemoveColon(token)) {
+            if (labelDefinitionsCount == MAX_LABEL_DEFS - 1) {
                 printf("Error on line %d: too many label definitions.\n", token.lineNumber);
                 exit(ExitCodeTooManyLabelDefinitions);
             }
-            state->labelDefinitions[state->labelDefinitionsCount++] = (struct LabelDefinition) { token.value, token.lineNumber, state->currentAddress };
+            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, token.lineNumber, currentAddress };
         } else {
             break;
         }
@@ -481,13 +520,13 @@ static struct Token parseLabelDefinitionsGetNextToken(struct AssemblerState* sta
 }
 
 /// Returns true if statement parsing should continue
-static bool parseStatement(struct AssemblerState* state) {
-    int labelDefinitionsStartIndex = state->labelDefinitionsCount;
-    struct Token firstTokenAfterLabels = parseLabelDefinitionsGetNextToken(state);
+static bool parseStatement() {
+    int labelDefinitionsStartIndex = labelDefinitionsCount;
+    struct Token firstTokenAfterLabels = parseLabelDefinitionsGetNextToken();
 
     if (firstTokenAfterLabels.value == NULL) {
-        if (state->labelDefinitionsCount > labelDefinitionsStartIndex) {
-            printf("Error on line %d: unexpected label definition at the end of the file.\n", state->lineNumber);
+        if (labelDefinitionsCount > labelDefinitionsStartIndex) {
+            printf("Error on line %d: unexpected label definition at the end of the file.\n", lineNumber);
             exit(ExitCodeUnexpectedEndOfFile);
         }
 
@@ -498,15 +537,15 @@ static bool parseStatement(struct AssemblerState* state) {
     enum Directive directive;
 
     if ((instruction = getInstruction(firstTokenAfterLabels.value)) != InstructionInvalid) {
-        insertInstruction(state, instruction);
+        insertInstruction(instruction);
     } else if ((directive = getDirective(firstTokenAfterLabels.value)) != DirectiveInvalid) {
-        applyDirective(state, directive, labelDefinitionsStartIndex);
+        applyDirective(directive, labelDefinitionsStartIndex);
     } else if (isStringLiteral(firstTokenAfterLabels.value)) {
-        declareString(state, firstTokenAfterLabels);
+        declareString(firstTokenAfterLabels);
     } else if (isNumberLiteral(firstTokenAfterLabels.value)) {
-        declareNumber(state, firstTokenAfterLabels);
+        declareNumber(firstTokenAfterLabels);
     } else if (isCharacterLiteral(firstTokenAfterLabels.value)) {
-        declareCharacter(state, firstTokenAfterLabels);
+        declareCharacter(firstTokenAfterLabels);
     } else {
         printf("Error on line %d: invalid token \"%s\".\n", firstTokenAfterLabels.lineNumber, firstTokenAfterLabels.value);
         exit(ExitCodeInvalidToken);
@@ -515,14 +554,14 @@ static bool parseStatement(struct AssemblerState* state) {
     return true;
 }
 
-static void resolveLabels(struct AssemblerState* state) {
-    for (int i = state->labelDefinitionsCount - 1; i >= 0; --i) {
-        state->result.labelNameByAddress[state->labelDefinitions[i].address] = state->labelDefinitions[i].name;
+static void resolveLabels() {
+    for (int i = labelDefinitionsCount - 1; i >= 0; --i) {
+        result.labelNameByAddress[labelDefinitions[i].address] = labelDefinitions[i].name;
     }
 
-    for (int i = 0; i < state->labelUsesCount; ++i) {
-        struct LabelUse* labelUse = &state->labelUses[i];
-        struct LabelDefinition* labelDefinition = findLabelDefinition(state, labelUse);
+    for (int i = 0; i < labelUsesCount; ++i) {
+        struct LabelUse* labelUse = &labelUses[i];
+        struct LabelDefinition* labelDefinition = findLabelDefinition(labelUse);
         int evaluatedAddress = labelDefinition->address + labelUse->offset;
         
         if (evaluatedAddress < 0 || evaluatedAddress >= ADDRESS_SPACE_SIZE) {
@@ -530,16 +569,16 @@ static void resolveLabels(struct AssemblerState* state) {
             exit(ExitCodeReferenceToInvalidAddress);
         }
         
-        state->result.programMemory[labelUse->address] |= evaluatedAddress >> (labelUse->byte * 8);
+        result.programMemory[labelUse->address] |= evaluatedAddress >> (labelUse->byte * 8);
     }
 }
 
 struct AssemblerResult assemble(char* source) {
-    struct AssemblerState state = { source, 1, 0, { false }, { 0 }, 0, { 0 }, 0, (struct AssemblerResult){ { 0 }, { DataTypeNone }, { NULL } } };
+    sourceString = source;
 
-    while (parseStatement(&state)) {}
+    while (parseStatement()) {}
 
-    resolveLabels(&state);
+    resolveLabels();
 
-    return state.result;
+    return result;
 }

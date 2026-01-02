@@ -20,6 +20,7 @@ enum ExitCode {
     ExitCodeMemoryValueOverridden,
     ExitCodeTooManyLabelDefinitions,
     ExitCodeTooManyLabelUses,
+    ExitCodeTooManyImmediateValueUses,
     ExitCodeReferenceToInvalidAddress,
     ExitCodeOriginOutOfMemoryRange,
     ExitCodeInvalidInstructionArgument,

@@ -27,5 +27,5 @@
 0x0030,char,#'a'
 0x0031,char,#-'z'-1
 0x0032,char,#'z'+1
-0x0033,int,#32
+0x0033,int,#-32
 0x1FFF,char,IO

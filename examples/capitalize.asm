@@ -26,7 +26,7 @@ jmp loop
 
 capitalize:
 ld character
-add #32
+add #-32
 st IO
 jmp loop
 

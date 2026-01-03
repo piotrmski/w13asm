@@ -95,6 +95,7 @@ Directive names are case-insensitive.
     - number of words to fill (a number greater than 0).
 - `.LSB` followed by a label name, optionally with an offset. Places in memory the least significant byte of an address that a label evaluates to.
 - `.MSB` followed by a label name, optionally with an offset. Places in memory the most significant byte of an address that a label evaluates to.
+- `.IMMEDIATES` takes no arguments. Declares immediate values used in previous instructions. If this directive is not used, then immediate values are declared after the last instruction or explicit data declaration.
 
 ## Data declaration
 
@@ -118,9 +119,9 @@ The following escape sequences can be used in strings and characters (they are c
 
 ## Immediate value expressions
 
-In case of `LD`, `NOT`, `ADD` and `AND` instructions a one byte number or a character expression can be used as an immediate value argument, if prefixed by `#`. As a result:
+Instructions `LD`, `NOT`, `ADD` and `AND` can take an immediate value as an argument. Prefix a one byte number or a character expression with `#` and as a result:
 
-- The value is declared after the last instruction or explicit data declaration,
+- The value is declared at the next `.IMMEDIATES` directive, or after the last instruction or explicit data declaration,
 - The instruction argument is set to the address of the dynamically declared value.
 
 If multiple immediate value expressions evaluate to the same value, then they all evaluate to the same address.

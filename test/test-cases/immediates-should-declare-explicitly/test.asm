@@ -1,0 +1,11 @@
+ld #'a'
+ld #'b'
+ld #'c'
+.immediates
+ld #0x62
+ld #0x63
+ld #0x64
+.org 0x10
+.immediates
+.org 0x20
+ld #0x65

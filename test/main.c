@@ -248,6 +248,7 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("immediate-expr-should-disallow-st", ExitCodeInvalidInstructionArgument);
     expectErrorCode("immediate-expr-should-disallow-too-high", ExitCodeCharacterLiteralOutOutRange);
     expectErrorCode("immediate-expr-should-disallow-too-low", ExitCodeCharacterLiteralOutOutRange);
+    expectSuccess("immediates-should-declare-explicitly");
 
     printf("Tests passed: %d\nTests failed: %d\n", testResults.passed, testResults.failed);
 }

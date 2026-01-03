@@ -2,6 +2,7 @@ ld #'a'
 ld #'b'
 ld #'c'
 .immediates
+.immediates
 ld #0x62
 ld #0x63
 ld #0x64

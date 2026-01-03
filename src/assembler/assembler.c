@@ -31,6 +31,7 @@ enum Directive {
     DirectiveFill,
     DirectiveLsb,
     DirectiveMsb,
+    DirectiveImmediates,
     DirectiveInvalid
 };
 
@@ -78,6 +79,7 @@ static struct LabelUse labelUses[MAX_LABEL_USES];
 static int labelUsesCount = 0;
 static struct ImmediateValueUse immediateValueUses[MAX_IMMEDIATE_VAL_USES];
 static int immediateValueUsesCount = 0;
+static char* labelNamesByImmediateValue[256] = { NULL };
 static struct AssemblerResult result = (struct AssemblerResult){ { 0 }, { DataTypeNone }, { NULL } };
 
 static void assertNoMemoryViolation(int address, int lineNumber) {
@@ -179,6 +181,8 @@ static enum Directive getDirective(char* name) {
         return DirectiveLsb;
     } else if (stringsEqualCaseInsensitive(name, ".MSB")) {
         return DirectiveMsb;
+    } else if (stringsEqualCaseInsensitive(name, ".IMMEDIATES")) {
+        return DirectiveImmediates;
     } else {
         return DirectiveInvalid;
     }
@@ -474,6 +478,43 @@ static void applyLsbOrMsbDirective(enum Directive directive) {
         (struct LabelUse) { labelUse.name, labelUse.offset, byte, param.lineNumber, currentAddress++ };
 }
 
+static void resolveImmediateValues() {
+    for (int i = 0; i < immediateValueUsesCount; ++i) {
+        struct Token token = immediateValueUses[i].token;
+        struct Token valueToken = (struct Token) { token.lineNumber, token.length - 1, token.value + 1 };
+
+        unsigned char value = isCharacterLiteral(valueToken.value)
+            ? parseCharacterLiteral(valueToken)
+            : parseNumberLiteral(valueToken, NumberLiteralRangeByte);
+        enum DataType dataType = isCharacterLiteral(valueToken.value) ? DataTypeChar : DataTypeInt;
+        
+        if (labelNamesByImmediateValue[value] == NULL) {
+            if (currentAddress >= ADDRESS_SPACE_SIZE) {
+                printf("Error on line %d: can't add immediate values after the last explicit value declaration due to insufficient space.\n", lineNumber);
+                exit(ExitCodeImmediateValueDeclarationOutOfMemoryRange);
+            }
+            assertNoMemoryViolation(currentAddress, lineNumber);
+            assertCanAddLabelDefinition(token.lineNumber);
+            labelNamesByImmediateValue[value] = token.value;
+            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, currentAddress };
+            result.dataType[currentAddress] = dataType;
+            result.programMemory[currentAddress++] = value;
+        }
+
+        assertCanAddLabelUses(2, token.lineNumber);
+        labelUses[labelUsesCount++] =
+            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 0, token.lineNumber, immediateValueUses[i].address };
+        labelUses[labelUsesCount++] =
+            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 1, token.lineNumber, immediateValueUses[i].address + 1 };
+    }
+
+    immediateValueUsesCount = 0;
+}
+
+static void applyImmediatesDirective() {
+    resolveImmediateValues();
+}
+
 static void applyDirective(enum Directive directive, int labelDefinitionsStartIndex) {
     switch (directive) {
         case DirectiveOrg: return applyOrgDirective(labelDefinitionsStartIndex);
@@ -481,6 +522,7 @@ static void applyDirective(enum Directive directive, int labelDefinitionsStartIn
         case DirectiveFill: return applyFillDirective();
         case DirectiveLsb:
         case DirectiveMsb: return applyLsbOrMsbDirective(directive);
+        case DirectiveImmediates: return applyImmediatesDirective();
         case DirectiveInvalid: break;
     }
 }
@@ -565,44 +607,6 @@ static bool parseStatement() {
     return true;
 }
 
-static void resolveImmediateValues() {
-    char* labelNamesByImmediateValue[256] = { NULL };
-
-    for (int i = 0; i < ADDRESS_SPACE_SIZE; ++i) {
-        if (programMemoryWritten[i]) {
-            currentAddress = i + 1;
-        }
-    }
-
-    for (int i = 0; i < immediateValueUsesCount; ++i) {
-        struct Token token = immediateValueUses[i].token;
-        struct Token valueToken = (struct Token) { token.lineNumber, token.length - 1, token.value + 1 };
-
-        unsigned char value = isCharacterLiteral(valueToken.value)
-            ? parseCharacterLiteral(valueToken)
-            : parseNumberLiteral(valueToken, NumberLiteralRangeByte);
-        enum DataType dataType = isCharacterLiteral(valueToken.value) ? DataTypeChar : DataTypeInt;
-        
-        if (labelNamesByImmediateValue[value] == NULL) {
-            if (currentAddress >= ADDRESS_SPACE_SIZE) {
-                printf("Error on line %d: can't add immediate values after the last explicit value declaration due to insufficient space.\n", lineNumber);
-                exit(ExitCodeImmediateValueDeclarationOutOfMemoryRange);
-            }
-            assertCanAddLabelDefinition(token.lineNumber);
-            labelNamesByImmediateValue[value] = token.value;
-            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, currentAddress };
-            result.dataType[currentAddress] = dataType;
-            result.programMemory[currentAddress++] = value;
-        }
-
-        assertCanAddLabelUses(2, token.lineNumber);
-        labelUses[labelUsesCount++] =
-            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 0, token.lineNumber, immediateValueUses[i].address };
-        labelUses[labelUsesCount++] =
-            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 1, token.lineNumber, immediateValueUses[i].address + 1 };
-    }
-}
-
 static void resolveLabels() {
     for (int i = labelDefinitionsCount - 1; i >= 0; --i) {
         result.labelNameByAddress[labelDefinitions[i].address] = labelDefinitions[i].name;
@@ -626,6 +630,12 @@ struct AssemblerResult assemble(char* source) {
     sourceString = source;
 
     while (parseStatement()) {}
+
+    for (int i = 0; i < ADDRESS_SPACE_SIZE; ++i) {
+        if (programMemoryWritten[i]) {
+            currentAddress = i + 1;
+        }
+    }
 
     resolveImmediateValues();
     resolveLabels();

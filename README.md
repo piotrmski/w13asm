@@ -95,7 +95,9 @@ Directive names are case-insensitive.
     - number of words to fill (a number greater than 0).
 - `.LSB` followed by a label name, optionally with an offset. Places in memory the least significant byte of an address that a label evaluates to.
 - `.MSB` followed by a label name, optionally with an offset. Places in memory the most significant byte of an address that a label evaluates to.
-- `.IMMEDIATES` takes no arguments. Declares immediate values used in previous instructions. If this directive is not used, then immediate values are declared after the last instruction or explicit data declaration.
+- `.IMMEDIATES` takes no arguments. Declares [immediate values](#immediate-value-expressions) used in previous instructions. If this directive is not used, then immediate values are declared after the last instruction or explicit data declaration.
+- `.MACRO` begins a [macro declaration](#macros).
+- `.ENDMACRO` ends a macro declaration.
 
 ## Data declaration
 
@@ -142,6 +144,10 @@ AND const192
 ADD const192
 const192: 192
 ```
+
+## Macros
+
+Use .MACRO *name*(*param1*, *param2*, ... , *paramN*) to begin a macro definition and .ENDMACRO to end it. Then use *name*(*argument1*, *argument2*, ... , *argumentN*) to invoke the macro. Parameters may be used in the body of the macro in place of any token and arguments will replace these parameters when invoked. You may define between 0 and 16 parameters. Parentheses are required for definition and invoking even if no parameters are defined. Macro and parameter names follow the same naming rules as labels and their names must not collide with global labels and previously defined macros. Labels defined within a macro are local to that macro, therefore are undefined outside that macro and will point to a different addresses every time that macro is invoked.
 
 ## Examples
 

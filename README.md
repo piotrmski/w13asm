@@ -55,7 +55,7 @@ W13 assembly code consists of one or more **statements**. A **statement** consis
 - a **directive** name and arguments, or
 - **data declaration**.
 
-Whitespace must separate statements and all parts of a statement. Whitespace includes newline characters, therefore a single statement may span multiple lines of assembly code.
+Whitespace must separate statements, label definitions, and instructions/directives/macros from their arguments. Multiple directive or macro arguments must be separated with one comma and at least one whitespace character. Whitespace includes newline characters, therefore a single statement may span multiple lines of assembly code.
 
 Any line of assembly code may end with a **comment** starting with a semicolon `;`.
 
@@ -84,17 +84,17 @@ Instruction set:
 
 Directive names are case-insensitive.
 
-- `.ORG` followed by a number between 0 and 8191 as an argument. Places the following statements at a specified memory address.
-- `.ALIGN` followed by a number between 1 and 12 as an argument. Places the following statements at the nearest (towards higher) address where a number of least significant bits equal to the argument value are unset. Examples:
+- `.ORG addr` where `addr` is a number 0 and 8191. Places the following statements at a specified memory address.
+- `.ALIGN bytes` where `bytes` is a number between 1 and 12. Places the following statements at the nearest (towards higher) address where a number of least significant bits equal to the argument value are unset. Examples:
     - current address is 0x0123, `.ALIGN 4` sets the next address to 0x0130,
     - current address is 0x0120, `.ALIGN 4` sets the next address to 0x0120,
     - current address is 0x0123, `.ALIGN 8` sets the next address to 0x0200,
     - current address is 0x0100, `.ALIGN 8` sets the next address to 0x0100.
-- `.FILL` followed by two arguments:
-    - value to be filled (a number between -128 and 255 or a [character expression](#data-declaration)),
-    - number of words to fill (a number greater than 0).
-- `.LSB` followed by a label name, optionally with an offset. Places in memory the least significant byte of an address that a label evaluates to.
-- `.MSB` followed by a label name, optionally with an offset. Places in memory the most significant byte of an address that a label evaluates to.
+- `.FILL val, cnt` where:
+    - `val` is value to be filled (a number between -128 and 255 or a [character expression](#data-declaration)),
+    - `cnt` is number of words to fill (a number greater than 0).
+- `.LSB label` where `label` is a label name, optionally with an offset. Places in memory the least significant byte of an address that a label evaluates to.
+- `.MSB label` where `label` is a label name, optionally with an offset. Places in memory the most significant byte of an address that a label evaluates to.
 - `.IMMEDIATES` takes no arguments. Declares [immediate values](#immediate-value-expressions) used in previous instructions. If this directive is not used, then immediate values are declared after the last instruction or explicit data declaration.
 - `.MACRO` begins a [macro declaration](#macros).
 - `.ENDMACRO` ends a macro declaration.
@@ -147,7 +147,42 @@ const192: 192
 
 ## Macros
 
-Use .MACRO *name*(*param1*, *param2*, ... , *paramN*) to begin a macro definition and .ENDMACRO to end it. Then use *name*(*argument1*, *argument2*, ... , *argumentN*) to invoke the macro. Parameters may be used in the body of the macro in place of any token and arguments will replace these parameters when invoked. You may define between 0 and 16 parameters. Parentheses are required for definition and invoking even if no parameters are defined. Macro and parameter names follow the same naming rules as labels and their names must not collide with global labels and previously defined macros. Labels defined within a macro are local to that macro, therefore are undefined outside that macro and will point to a different addresses every time that macro is invoked.
+Use `.MACRO name, param1, param2, ..., paramN` to begin a macro definition named `name` with N parameters. Use `.MACRO name` to begin a macro definition without parameters. You may define between 0 and 15 parameters. Use `.ENDMACRO` to end the macro definition. Use `name argument1, argument2, ..., argumentN` to invoke the macro.
+
+Parameters may be used in the body of the macro in two ways:
+
+- by referring to their names as-is to replace full tokens:
+
+```
+.MACRO JNZ, destination
+  JMZ next
+  JMP destination
+  next:
+.ENDMACRO
+```
+
+- by referring to their names surrounded by `${` and `}` to replace parts of tokens:
+
+```
+.MACRO LDI, addr
+  LD addr
+  ST instruction
+  LD ${addr}+1
+  ST instruction+1
+  instruction: LD 0
+.ENDMACRO
+```
+
+Macro and parameter names are case sensitive. Macro and parameter names must:
+
+- follow the same character and length rules as [labels](#labels),
+- not collide with global labels and previously defined macro names,
+- not collide with each other within each macro definition,
+- not collide with instruction names.
+
+Labels defined within a macro are local to that macro, therefore are undefined outside that macro and will point to a different addresses every time that macro is invoked.
+
+A macro can't be defined inside the body of another macro, but previously defined macros can be invoked in later macros.
 
 ## Examples
 

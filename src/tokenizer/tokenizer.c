@@ -4,7 +4,9 @@
 #include "stdlib.h"
 #include "../../common/exit-code.h"
 
-static void skipUntilTokenStart(char** string, int* lineNumber) {
+static int lineNumber = 1;
+
+static void skipUntilTokenStart(char** string) {
     bool isComment = false;
 
     while (isspace(**string) || isComment || **string == ';') {
@@ -12,19 +14,19 @@ static void skipUntilTokenStart(char** string, int* lineNumber) {
             isComment = true;
         } else if (**string == '\n') {
             isComment = false;
-            ++*lineNumber;
+            ++lineNumber;
         }
 
         ++*string;
     }
 }
 
-static void skipUntilAfterStringEnd(char** string, int* lineNumber) {
+static void skipUntilAfterStringEnd(char** string) {
     char terminator = **string;
 
     do {
         if (**string == '\n') {
-            ++*lineNumber;
+            ++lineNumber;
         }
 
         if (**string == '\\' && *(*string + 1) == terminator) {
@@ -35,53 +37,53 @@ static void skipUntilAfterStringEnd(char** string, int* lineNumber) {
     } while (**string != terminator && **string != 0);
 
     if (**string == 0) {
-        printf("Error on line %d: unterminated %s literal.\n", *lineNumber, terminator == '"' ? "string" : "character");
+        printf("Error on line %d: unterminated %s literal.\n", lineNumber, terminator == '"' ? "string" : "character");
         exit(ExitCodeUnterminatedString);
     }
 
     ++*string;
 }
 
-static void skipUntilAfterTokenEnd(char** string, int* lineNumber) {
+static void skipUntilAfterTokenEnd(char** string) {
     while (!isspace(**string) && **string != ';' && **string != 0) {
         if (**string == '"' || **string == '\'') {
-            skipUntilAfterStringEnd(string, lineNumber);
+            skipUntilAfterStringEnd(string);
         } else {
             ++*string;
         }
     }
 }
 
-static void zeroTerminate(char** string, int* lineNumber) {
+static void zeroTerminate(char** string) {
     if (**string == ';' && *(*string + 1) != '\n' && *(*string + 1) != 0) { // If a non-empty comment follows the token
         *(*string + 1) = ';'; // Move the start of the comment one character forward
     }
 
     if (**string == '\n') {
-        ++*lineNumber;
+        ++lineNumber;
     }
 
     **string = 0;
     ++*string;
 }
 
-struct Token getToken(char** string, int* lineNumber) {
-    skipUntilTokenStart(string, lineNumber);
+struct Token getToken(char** string) {
+    skipUntilTokenStart(string);
 
     if (**string == 0) {
-        return (struct Token) { *lineNumber, 0, NULL };
+        return (struct Token) { lineNumber, 0, NULL };
     }
 
-    int tokenStartLineNumber = *lineNumber;
+    int tokenStartLineNumber = lineNumber;
 
     char* result = *string;
 
-    skipUntilAfterTokenEnd(string, lineNumber);
+    skipUntilAfterTokenEnd(string);
 
     char* end = *string;
 
     if (**string != 0) {
-        zeroTerminate(string, lineNumber);
+        zeroTerminate(string);
     }
 
     return (struct Token) { tokenStartLineNumber, end - result, result };

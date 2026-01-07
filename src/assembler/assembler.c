@@ -70,7 +70,6 @@ struct EscapeSequenceParseResult {
 };
 
 static char* sourceString;
-static int lineNumber = 1;
 static int currentAddress = 0;
 static bool programMemoryWritten[ADDRESS_SPACE_SIZE] = { false };
 static struct LabelDefinition labelDefinitions[MAX_LABEL_DEFS];
@@ -208,6 +207,16 @@ static bool instructionAcceptsImmediateValue(enum Instruction instruction) {
     return instruction < InstructionSt;
 }
 
+static void trimComma(struct Token* token) {
+    if (token->value[token->length - 1] != ',') {
+        printf("Error on line %d: \"%s\" was not expected to be the last argument and was expected to end with a comma.\n", token->lineNumber, token->value);
+        exit(ExitCodeMissingComma);
+    }
+
+    token->length--;
+    token->value[token->length] = 0;
+}
+
 struct LabelDefinition* findLabelDefinition(struct LabelUse* labelUse) {
     for (int i = 0; i < labelDefinitionsCount; ++i) {
         if (strcmp(labelDefinitions[i].name, labelUse->name) == 0) {
@@ -220,13 +229,13 @@ struct LabelDefinition* findLabelDefinition(struct LabelUse* labelUse) {
 }
 
 static struct Token getNextToken() {
-    return getToken(&sourceString, &lineNumber);
+    return getToken(&sourceString);
 }
 
 static struct Token getNextNonEmptyToken() {
     struct Token result = getNextToken();
     if (result.value == NULL) {
-        printf("Error on line %d: unexpected end of file.\n", lineNumber);
+        printf("Error on line %d: unexpected end of file.\n", result.lineNumber);
         exit(ExitCodeUnexpectedEndOfFile);
     }
     return result;
@@ -375,7 +384,7 @@ static unsigned char parseCharacterLiteral(struct Token token) {
     return result;
  }
 
-static void insertInstruction(enum Instruction instruction) {
+static void insertInstruction(enum Instruction instruction, int lineNumber) {
     assertNoMemoryViolation(currentAddress, lineNumber);
     assertNoMemoryViolation(currentAddress + 1, lineNumber);
     result.dataType[currentAddress] = DataTypeInstruction;
@@ -438,6 +447,7 @@ static void applyAlignDirective(int labelDefinitionsStartIndex) {
 
 static void applyFillDirective() {
     struct Token valueParam = getNextNonEmptyToken();
+    trimComma(&valueParam);
     struct Token countParam = getNextNonEmptyToken();
 
     unsigned char value, count;
@@ -490,10 +500,10 @@ static void resolveImmediateValues() {
         
         if (labelNamesByImmediateValue[value] == NULL) {
             if (currentAddress >= ADDRESS_SPACE_SIZE) {
-                printf("Error on line %d: can't add immediate values after the last explicit value declaration due to insufficient space.\n", lineNumber);
+                printf("Error on line %d: can't add immediate values after the last explicit value declaration due to insufficient space.\n", token.lineNumber);
                 exit(ExitCodeImmediateValueDeclarationOutOfMemoryRange);
             }
-            assertNoMemoryViolation(currentAddress, lineNumber);
+            assertNoMemoryViolation(currentAddress, token.lineNumber);
             assertCanAddLabelDefinition(token.lineNumber);
             labelNamesByImmediateValue[value] = token.value;
             labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, currentAddress };
@@ -579,7 +589,7 @@ static bool parseStatement() {
 
     if (firstTokenAfterLabels.value == NULL) {
         if (labelDefinitionsCount > labelDefinitionsStartIndex) {
-            printf("Error on line %d: unexpected label definition at the end of the file.\n", lineNumber);
+            printf("Error on line %d: unexpected label definition at the end of the file.\n", firstTokenAfterLabels.lineNumber);
             exit(ExitCodeUnexpectedEndOfFile);
         }
 
@@ -590,7 +600,7 @@ static bool parseStatement() {
     enum Directive directive;
 
     if ((instruction = getInstruction(firstTokenAfterLabels.value)) != InstructionInvalid) {
-        insertInstruction(instruction);
+        insertInstruction(instruction, firstTokenAfterLabels.lineNumber);
     } else if ((directive = getDirective(firstTokenAfterLabels.value)) != DirectiveInvalid) {
         applyDirective(directive, labelDefinitionsStartIndex);
     } else if (isStringLiteral(firstTokenAfterLabels.value)) {

@@ -1,2 +1,2 @@
 st test
-test: .fill 'a' 1
+test: .fill 'a', 1

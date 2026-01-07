@@ -29,7 +29,8 @@ enum ExitCode {
     ExitCodeInvalidCharacterLiteral,
     ExitCodeUndefinedLabel,
     ExitCodeUnexpectedEndOfFile,
-    ExitCodeImmediateValueDeclarationOutOfMemoryRange
+    ExitCodeImmediateValueDeclarationOutOfMemoryRange,
+    ExitCodeMissingComma
 };
 
 #endif

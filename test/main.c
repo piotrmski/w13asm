@@ -223,6 +223,7 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("string-should-disallow-unterminated", ExitCodeUnterminatedString);
     expectErrorCode("fill-should-disallow-multiple-characters", ExitCodeInvalidDirectiveArgument);
     expectErrorCode("fill-should-disallow-non-positive-count", ExitCodeInvalidDirectiveArgument);
+    expectErrorCode("fill-first-arg-should-expect-comma", ExitCodeMissingComma);
     expectSuccess("label-before-align-should-point-to-valid-address");
     expectSuccess("label-before-fill-should-point-to-valid-address");
     expectSuccess("label-before-org-should-point-to-valid-address");

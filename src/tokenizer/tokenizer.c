@@ -9,7 +9,7 @@ static int lineNumber = 1;
 static void skipUntilTokenStart(char** string) {
     bool isComment = false;
 
-    while (isspace(**string) || isComment || **string == ';') {
+    while (isspace(**string) || isComment && **string != 0 || **string == ';') {
         if (**string == ';') {
             isComment = true;
         } else if (**string == '\n') {

@@ -1,0 +1,6 @@
+0x0000,instruction,
+0x0002,instruction,
+0x0004,instruction,
+0x0006,instruction,next@JNZ.0
+0x0008,instruction,end
+0x000A,int,#5

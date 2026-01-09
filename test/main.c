@@ -250,6 +250,21 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("immediate-expr-should-disallow-too-high", ExitCodeCharacterLiteralOutOutRange);
     expectErrorCode("immediate-expr-should-disallow-too-low", ExitCodeCharacterLiteralOutOutRange);
     expectSuccess("immediates-should-declare-explicitly");
+    expectSuccess("macro-ending-with-label-should-allow-invocation-not-at-end");
+    expectErrorCode("macro-ending-with-label-should-disallow-invocation-at-end", ExitCodeUnexpectedEndOfFile);
+    expectErrorCode("macro-invoke-should-disallow-too-few-args", ExitCodeInvalidMacroArgumentsCount);
+    expectErrorCode("macro-invoke-should-disallow-too-many-args", ExitCodeInvalidMacroArgumentsCount);
+    expectErrorCode("macro-name-should-disallow-collision-with-another-macro", ExitCodeNameCollision);
+    expectErrorCode("macro-name-should-disallow-collision-with-label-after", ExitCodeNameCollision);
+    expectErrorCode("macro-name-should-disallow-collision-with-label-before", ExitCodeNameCollision);
+    expectErrorCode("macro-name-should-disallow-collision-with-parameter", ExitCodeNameCollision);
+    expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-parameter", ExitCodeNameCollision);
+    expectSuccess("macro-should-allow-no-body");
+    expectSuccess("macro-should-allow-no-params");
+    expectErrorCode("macro-should-disallow-no-beginning", ExitCodeUnexpectedEndOfMacro);
+    expectErrorCode("macro-should-disallow-no-end", ExitCodeUnexpectedEndOfFile);
+    expectErrorCode("macro-should-disallow-recurrence", ExitCodeInvalidToken);
+    expectSuccess("macro-should-replace-parts-of-tokens");
 
     printf("Tests passed: %d\nTests failed: %d\n", testResults.passed, testResults.failed);
 }

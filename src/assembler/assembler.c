@@ -8,9 +8,9 @@
 #include <limits.h>
 #include <errno.h>
 
-#define MAX_LABEL_DEFS 0x1000
+#define MAX_LABEL_DEFS 0x2000
 #define MAX_LABEL_USES 0x2000
-#define MAX_IMMEDIATE_VAL_USES 0x1000
+#define MAX_IMMEDIATE_VAL_USES 0x2000
 #define MAX_LABEL_NAME_LEN_INCL_0 0x20
 
 enum Instruction {

@@ -30,7 +30,12 @@ enum ExitCode {
     ExitCodeUndefinedLabel,
     ExitCodeUnexpectedEndOfFile,
     ExitCodeImmediateValueDeclarationOutOfMemoryRange,
-    ExitCodeMissingComma
+    ExitCodeMissingComma,
+    ExitCodeNameCollision,
+    ExitCodeUnexpectedEndOfMacro,
+    ExitCodeTooManyMacros,
+    ExitCodeTooManyMacroParams,
+    ExitCodeInvalidMacroArgumentsCount
 };
 
 #endif

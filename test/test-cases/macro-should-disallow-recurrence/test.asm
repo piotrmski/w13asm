@@ -1,0 +1,3 @@
+.macro terminate
+terminate
+.endmacro

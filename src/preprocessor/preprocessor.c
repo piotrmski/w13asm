@@ -7,6 +7,7 @@
 
 #define RESULT_SIZE_INCREMENT 0x1000
 #define MACRO_BODY_SIZE_INCREMENT 0x100
+#define MACRO_LABELS_SIZE_INCREMENT 0x10
 #define MAX_MACROS 0x100
 #define MAX_MACRO_PARAMS 0x10
 
@@ -16,6 +17,8 @@ struct Macro {
     int paramsCount;
     struct Token* tokens;
     int tokensCount;
+    char** labels;
+    int labelsCount; // TODO first substitute labels, then params
 };
 
 static char* sourceString;
@@ -60,13 +63,17 @@ static bool isMacroDefinitionStart(struct Token token) {
     return stringsEqualCaseInsensitive(token.value, ".MACRO");
 }
 
-static bool isMacroInvocation(struct Token token) {
+static bool isMacroDefinitionEnd(struct Token token) {
+    return stringsEqualCaseInsensitive(token.value, ".ENDMACRO");
+}
+
+static int getMacroIndexByName(char* name) {
     for (int i = 0; i < macrosCount; ++i) {
-        if (strcmp(token.value, macros[i].name) == 0) {
-            return true;
+        if (strcmp(name, macros[i].name) == 0) {
+            return i;
         }
     }
-    return false;
+    return -1;
 }
 
 static void registerLabel(struct Token token) {
@@ -100,7 +107,7 @@ static void registerMacro() {
     // TODO
 }
 
-static void invokeMacro(char* macroName) {
+static void invokeMacro(int macroIndex) {
     // TODO
 }
 
@@ -114,10 +121,13 @@ static void processToken() {
         pushToken(token);
     } else if (isMacroDefinitionStart(token)) {
         registerMacro();
-    } else if (isMacroInvocation(token)) {
-        invokeMacro(token.value);
     } else {
-        pushToken(token);
+        int macroIndex = getMacroIndexByName(token.value);
+        if (macroIndex >= 0) {
+            invokeMacro(macroIndex);
+        } else {
+            pushToken(token);
+        }
     }
 }
 

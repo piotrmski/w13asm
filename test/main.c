@@ -259,6 +259,7 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("macro-name-should-disallow-collision-with-label-before", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-parameter", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-parameter", ExitCodeNameCollision);
+    expectErrorCode("macro-parameter-name-should-disallow-collision-with-macro-label", ExitCodeNameCollision);
     expectSuccess("macro-should-allow-no-body");
     expectSuccess("macro-should-allow-no-params");
     expectErrorCode("macro-should-disallow-no-beginning", ExitCodeInvalidToken);

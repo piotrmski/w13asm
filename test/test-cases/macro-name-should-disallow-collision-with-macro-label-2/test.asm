@@ -1,5 +1,8 @@
+.macro next
+.endmacro
+
 .MACRO JNZ, destination
   JMZ next
   JMP destination
-  JNZ: next:
+  next:
 .ENDMACRO

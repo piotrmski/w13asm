@@ -1,4 +1,6 @@
 #include "shared.h"
+#include "../../common/exit-code.h"
+#include <stdlib.h>
 
 char charUppercase(char ch) {
     if (ch >= 'a' && ch <= 'z') return ch - 0x20;
@@ -6,6 +8,10 @@ char charUppercase(char ch) {
 }
 
 bool stringsEqualCaseInsensitive(char* string1, char* string2) {
+    if (string1 == NULL || string2 == NULL) {
+        return false;
+    }
+
     for (int i = 0;; ++i) {
         if (charUppercase(string1[i]) != charUppercase(string2[i])) {
             return false;
@@ -28,5 +34,12 @@ const char* getInstructionName(enum Instruction instruction) {
         case InstructionJmn: return "JMN"; 
         case InstructionJmz: return "JMZ"; 
         case InstructionInvalid: return "";
+    }
+}
+
+void assertTokenNotEmpty(struct Token token) {
+    if (token.value == NULL) {
+        printf("Error on line %d: unexpected end of file.\n", token.lineNumber);
+        exit(ExitCodeUnexpectedEndOfFile);
     }
 }

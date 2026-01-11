@@ -173,7 +173,7 @@ Parameters may be used in the body of the macro in two ways:
 .ENDMACRO
 ```
 
-Macro and parameter names are case sensitive. Macro and parameter names must:
+Macro and parameter names are case-sensitive. Macro and parameter names must:
 
 - follow the same character and length rules as [labels](#labels),
 - not collide with global labels and previously defined macro names,

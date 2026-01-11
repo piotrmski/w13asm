@@ -2,6 +2,10 @@
 #define shared
 
 #include <stdbool.h>
+#include "../tokenizer/tokenizer.h"
+
+#define MAX_LABEL_DEFS 0x2000
+#define MAX_LABEL_NAME_LEN_INCL_0 0x20
 
 enum Instruction {
     InstructionLd = 0,
@@ -20,5 +24,7 @@ char charUppercase(char ch);
 bool stringsEqualCaseInsensitive(char* string1, char* string2);
 
 const char* getInstructionName(enum Instruction instruction);
+
+void assertTokenNotEmpty(struct Token token);
 
 #endif

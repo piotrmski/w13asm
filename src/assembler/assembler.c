@@ -8,10 +8,8 @@
 #include <limits.h>
 #include <errno.h>
 
-#define MAX_LABEL_DEFS 0x2000
 #define MAX_LABEL_USES 0x2000
 #define MAX_IMMEDIATE_VAL_USES 0x2000
-#define MAX_LABEL_NAME_LEN_INCL_0 0x20
 
 enum Directive {
     DirectiveOrg,
@@ -194,10 +192,7 @@ static struct Token getNextToken() {
 
 static struct Token getNextNonEmptyToken() {
     struct Token result = getNextToken();
-    if (result.value == NULL) {
-        printf("Error on line %d: unexpected end of file.\n", result.lineNumber);
-        exit(ExitCodeUnexpectedEndOfFile);
-    }
+    assertTokenNotEmpty(result);
     return result;
 }
 
@@ -207,20 +202,6 @@ static bool isValidLabelDefinitionRemoveColon(struct Token token) {
     }
 
     token.value[token.length] = 0; // Trim the trailing colon character
-
-    if (token.length > MAX_LABEL_NAME_LEN_INCL_0 - 1) {
-        printf("Error on line %d: label name too long.\n", token.lineNumber);
-        exit(ExitCodeLabelNameTooLong);
-    }
-
-    for (int i = 0; i < token.length; ++i) {
-        char ch = token.value[i];
-        bool characterValid = ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || i > 0 && ch >= '0' && ch <= '9';
-        if (!characterValid) {
-            printf("Error on line %d: \"%s\" is not a valid label name.\n", token.lineNumber, token.value);
-            exit(ExitCodeInvalidLabelName);
-        }
-    }
 
     for (int i = 0; i < labelDefinitionsCount; ++i) {
         if (strcmp(labelDefinitions[i].name, token.value) == 0) {

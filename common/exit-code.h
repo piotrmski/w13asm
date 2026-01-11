@@ -32,7 +32,6 @@ enum ExitCode {
     ExitCodeImmediateValueDeclarationOutOfMemoryRange,
     ExitCodeMissingComma,
     ExitCodeNameCollision,
-    ExitCodeUnexpectedEndOfMacro,
     ExitCodeTooManyMacros,
     ExitCodeTooManyMacroParams,
     ExitCodeInvalidMacroArgumentsCount

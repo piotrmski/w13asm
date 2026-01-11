@@ -197,18 +197,11 @@ static struct Token getNextNonEmptyToken() {
 }
 
 static bool isValidLabelDefinitionRemoveColon(struct Token token) {
-    if (token.value[--token.length] != ':') {
+    if (token.value[token.length - 1] != ':') {
         return false;
     }
 
-    token.value[token.length] = 0; // Trim the trailing colon character
-
-    for (int i = 0; i < labelDefinitionsCount; ++i) {
-        if (strcmp(labelDefinitions[i].name, token.value) == 0) {
-            printf("Error on line %d: label name \"%s\" is not unique.\n", token.lineNumber, token.value);
-            exit(ExitCodeLabelNameNotUnique);
-        }
-    }
+    token.value[--token.length] = 0; // Trim the trailing colon character
 
     return true;
 }

@@ -53,6 +53,23 @@ static bool isValidLabelDefinition(struct Token token) {
         }
     }
 
+    return true;
+}
+
+static bool isMacroDefinitionStart(struct Token token) {
+    return stringsEqualCaseInsensitive(token.value, ".MACRO");
+}
+
+static bool isMacroInvocation(struct Token token) {
+    for (int i = 0; i < macrosCount; ++i) {
+        if (strcmp(token.value, macros[i].name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void registerLabel(struct Token token) {
     char* labelName = malloc(token.length - 1);
     memcpy(labelName, token.value, token.length - 1);
     labelName[token.length - 1] = 0;
@@ -63,23 +80,20 @@ static bool isValidLabelDefinition(struct Token token) {
             exit(ExitCodeNameCollision);
         }
     }
+
+    if (labelsCount == MAX_LABEL_DEFS - 1) {
+        printf("Error on line %d: too many label definitions.\n", token.lineNumber);
+        exit(ExitCodeTooManyLabelDefinitions);
+    }
+
+    for (int i = 0; i < labelsCount; ++i) {
+        if (strcmp(labelName, labels[i]) == 0) {
+            printf("Error on line %d: label name \"%s\" is not unique.\n", token.lineNumber, token.value);
+            exit(ExitCodeLabelNameNotUnique);
+        }
+    }
  
     labels[labelsCount++] = labelName;
-
-    return true;
-}
-
-static bool isMacroDefinitionStart(struct Token token) {
-    return stringsEqualCaseInsensitive(token.value, ".MACRO");
-}
-
-static bool isMacroInvocation(struct Token token) {
-    // TODO
-    return false;
-}
-
-static void registerLabel(char* labelNameWithColon) {
-    // TODO
 }
 
 static void registerMacro() {
@@ -96,7 +110,7 @@ static void processToken() {
     if (token.value == NULL) {
         pushToken(token);
     } else if (isValidLabelDefinition(token)) {
-        registerLabel(token.value);
+        registerLabel(token);
         pushToken(token);
     } else if (isMacroDefinitionStart(token)) {
         registerMacro();

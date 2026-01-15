@@ -96,7 +96,7 @@ static void registerLabel(struct Token token) {
     for (int i = 0; i < labelsCount; ++i) {
         if (strcmp(labelName, labels[i]) == 0) {
             printf("Error on line %d: label name \"%s\" is not unique.\n", token.lineNumber, token.value);
-            exit(ExitCodeLabelNameNotUnique);
+            exit(ExitCodeNameCollision);
         }
     }
  

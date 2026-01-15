@@ -205,6 +205,8 @@ int main(int argc, const char * argv[]) {
     expectSuccessAssembleExamples();
     expectErrorCode("empty-program-should-fail", ExitCodeResultProgramEmpty);
     expectSuccess("label-name-should-allow-valid-length-and-characters");
+    expectSuccess("label-name-should-allow-instruction-name");
+    expectSuccess("label-name-in-macro-should-allow-instruction-name");
     expectErrorCode("label-name-should-disallow-invalid-length", ExitCodeLabelNameTooLong);
     expectErrorCode("label-name-should-disallow-invalid-character", ExitCodeInvalidLabelName);
     expectSuccess("declaration-should-allow-near-memory-range");
@@ -235,7 +237,8 @@ int main(int argc, const char * argv[]) {
     expectSuccess("empty-string-should-produce-char-0");
     expectSuccess("label-at-higher-byte-of-instruction-should-be-int");
     expectSuccess("align-should-not-change-address-if-already-aligned");
-    expectErrorCode("labels-should-disallow-duplicates", ExitCodeLabelNameNotUnique);
+    expectErrorCode("labels-should-disallow-duplicates", ExitCodeNameCollision);
+    expectErrorCode("labels-in-macro-should-disallow-duplicates", ExitCodeNameCollision);
     expectSuccess("character-expressions-should-allow-modifiers-within-range");
     expectErrorCode("character-expressions-should-disallow-modifiers-too-low", ExitCodeCharacterLiteralOutOutRange);
     expectErrorCode("character-expressions-should-disallow-modifiers-too-high", ExitCodeCharacterLiteralOutOutRange);
@@ -254,11 +257,14 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("macro-ending-with-label-should-disallow-invocation-at-end", ExitCodeUnexpectedEndOfFile);
     expectErrorCode("macro-invoke-should-disallow-too-few-args", ExitCodeInvalidMacroArgumentsCount);
     expectErrorCode("macro-invoke-should-disallow-too-many-args", ExitCodeInvalidMacroArgumentsCount);
+    expectErrorCode("macro-name-should-disallow-collision-with-instruction", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-another-macro", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-label-after", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-label-before", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-parameter", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-macro-label", ExitCodeNameCollision);
+    expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-macro-name", ExitCodeNameCollision);
+    expectErrorCode("macro-parameter-name-should-disallow-collision-with-instruction-name", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-parameter", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-macro-label", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-macro-label-2", ExitCodeNameCollision);

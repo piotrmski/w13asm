@@ -267,13 +267,18 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-instruction-name", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-parameter", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-macro-label", ExitCodeNameCollision);
-    expectErrorCode("macro-parameter-name-should-disallow-collision-with-macro-label-2", ExitCodeNameCollision);
+    expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-macro-label", ExitCodeNameCollision);
+    expectErrorCode("macro-parameter-name-should-disallow-collision-with-global-label-before", ExitCodeNameCollision);
+    expectErrorCode("macro-parameter-name-should-disallow-collision-with-global-label-after", ExitCodeNameCollision);
+    expectErrorCode("label-name-inside-macro-should-disallow-collision-with-global-label-before", ExitCodeNameCollision);
+    expectErrorCode("label-name-inside-macro-should-disallow-collision-with-global-label-after", ExitCodeNameCollision);
     expectSuccess("macro-should-allow-no-body");
     expectSuccess("macro-should-allow-no-params");
     expectErrorCode("macro-should-disallow-no-beginning", ExitCodeInvalidToken);
     expectErrorCode("macro-should-disallow-no-end", ExitCodeUnexpectedEndOfFile);
     expectErrorCode("macro-should-disallow-recurrence", ExitCodeInvalidToken);
     expectSuccess("macro-should-replace-parts-of-tokens");
+    expectSuccess("macro-should-replace-multiple-parts-of-tokens");
 
     printf("Tests passed: %d\nTests failed: %d\n", testResults.passed, testResults.failed);
 }

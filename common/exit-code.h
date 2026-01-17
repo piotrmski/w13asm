@@ -33,7 +33,8 @@ enum ExitCode {
     ExitCodeNameCollision,
     ExitCodeTooManyMacros,
     ExitCodeTooManyMacroParams,
-    ExitCodeInvalidMacroArgumentsCount
+    ExitCodeInvalidMacroArgumentsCount,
+    ExitCodeNestedMacros
 };
 
 #endif

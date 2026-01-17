@@ -233,7 +233,7 @@ static struct LabelUseParseResult parseLabelUse(struct Token token) {
     char* offsetSign = strpbrk(token.value, "+-");
     int offset = 0;
     if (offsetSign != NULL) {
-        offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, offsetSign }, NumberLiteralRangeNone);
+        offset = parseNumberLiteral((struct Token) { offsetSign, 0, token.lineNumber, NULL, 0 }, NumberLiteralRangeNone);
         *offsetSign = 0;
     }
     return (struct LabelUseParseResult) { token.value, offset };
@@ -269,7 +269,7 @@ static struct EscapeSequenceParseResult parseEscapeSequence(struct Token token) 
             char numberString[5] = "0x00";
             numberString[2] = token.value[2];
             numberString[3] = token.value[3];
-            unsigned char number = parseNumberLiteral((struct Token) { token.lineNumber, 5, numberString }, NumberLiteralRangeNone);
+            unsigned char number = parseNumberLiteral((struct Token) { numberString, 5, token.lineNumber, NULL, 0 }, NumberLiteralRangeNone);
             return (struct EscapeSequenceParseResult) { number, 4 };
         default:
             printf("Error on line %d: invalid escape sequence \"\\%c\".\n", token.lineNumber, token.value[1]);
@@ -289,7 +289,7 @@ static unsigned char parseCharacterLiteral(struct Token token) {
     int charLength = 1;
     int character = (isNegative ? -1 : 1) * token.value[1];
     if (token.value[1] == '\\') {
-        struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.lineNumber, 0, token.value + 1 });
+        struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.value + 1, 0, token.lineNumber, NULL, 0 });
         character = (isNegative ? -1 : 1) * parsed.character;
         charLength = parsed.length;
     }
@@ -307,7 +307,7 @@ static unsigned char parseCharacterLiteral(struct Token token) {
         return character;
     }
 
-    int offset = parseNumberLiteral((struct Token) { token.lineNumber, 0, token.value + charLength + 2 }, NumberLiteralRangeNone);
+    int offset = parseNumberLiteral((struct Token) { token.value + charLength + 2, 0, token.lineNumber, NULL, 0 }, NumberLiteralRangeNone);
     int result = character + offset;
 
     if (result < CHAR_MIN || result > UCHAR_MAX) {
@@ -425,7 +425,7 @@ static void applyLsbOrMsbDirective(enum Directive directive) {
 static void resolveImmediateValues() {
     for (int i = 0; i < immediateValueUsesCount; ++i) {
         struct Token token = immediateValueUses[i].token;
-        struct Token valueToken = (struct Token) { token.lineNumber, token.length - 1, token.value + 1 };
+        struct Token valueToken = (struct Token) { token.value + 1, token.length - 1, token.lineNumber, NULL, 0 };
 
         unsigned char value = isCharacterLiteral(valueToken.value)
             ? parseCharacterLiteral(valueToken)
@@ -476,7 +476,7 @@ static void declareString(struct Token token) {
         assertNoMemoryViolation(currentAddress, token.lineNumber);
         result.dataType[currentAddress] = DataTypeChar;
         if (token.value[i] == '\\') {
-            struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.length, 0, token.value + i });
+            struct EscapeSequenceParseResult parsed = parseEscapeSequence((struct Token) { token.value + i, 0, token.length, NULL, 0 });
             result.programMemory[currentAddress++] = parsed.character;
             i += parsed.length - 1;
         } else {

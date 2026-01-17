@@ -3,12 +3,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
-
-struct Token {
-    int lineNumber;
-    int length;
-    char* value;
-};
+#include "../shared/shared.h"
 
 /**
  * Returned structure field value points to the first token in the string

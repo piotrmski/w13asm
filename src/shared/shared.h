@@ -7,6 +7,14 @@
 #define MAX_LABEL_DEFS 0x2000
 #define MAX_LABEL_NAME_LEN_INCL_0 0x20
 
+struct Token {
+    char* value;
+    int length;
+    int lineNumber;
+    char* macroName;
+    int macroInvocationIndex;
+};
+
 enum Instruction {
     InstructionLd = 0,
     InstructionNot = 1,

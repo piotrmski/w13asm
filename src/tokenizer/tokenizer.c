@@ -71,7 +71,7 @@ struct Token getToken(char** string) {
     skipUntilTokenStart(string);
 
     if (**string == 0) {
-        return (struct Token) { lineNumber, 0, NULL };
+        return (struct Token) { NULL, 0, lineNumber, NULL, 0 };
     }
 
     int tokenStartLineNumber = lineNumber;
@@ -86,5 +86,5 @@ struct Token getToken(char** string) {
         zeroTerminate(string);
     }
 
-    return (struct Token) { tokenStartLineNumber, end - result, result };
+    return (struct Token) { result, end - result, tokenStartLineNumber, NULL, 0 };
 }

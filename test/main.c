@@ -279,6 +279,7 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("macro-should-disallow-recurrence", ExitCodeInvalidToken);
     expectSuccess("macro-should-replace-parts-of-tokens");
     expectSuccess("macro-should-replace-multiple-parts-of-tokens");
+    expectErrorCode("macro-should-disallow-nested-definition", ExitCodeNestedMacros);
 
     printf("Tests passed: %d\nTests failed: %d\n", testResults.passed, testResults.failed);
 }

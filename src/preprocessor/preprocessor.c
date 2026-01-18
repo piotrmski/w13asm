@@ -32,7 +32,7 @@ static int incompleteMacrosCount = 0;
 static int completeMacrosCount = 0;
 
 static struct Token getNextNonEmptyToken() {
-    struct Token result = getToken(sourceString);
+    struct Token result = getToken(&sourceString);
     assertTokenNotEmpty(result);
     return result;
 }
@@ -212,22 +212,25 @@ static void registerMacro() {
     ++completeMacrosCount;
 }
 
-static void processToken() {
-    struct Token token = getToken(&sourceString);
+static void processTokens() {
+    while (true) {
+        struct Token token = getToken(&sourceString);
 
-    if (token.value == NULL) {
-        pushToken(token);
-    } else if (isValidLabelDefinition(token)) {
-        registerLabel(token);
-        pushToken(token);
-    } else if (isMacroDefinitionStart(token)) {
-        registerMacro();
-    } else {
-        int macroIndex = getMacroIndexByName(token.value);
-        if (macroIndex >= 0) {
-            invokeMacro(macroIndex);
-        } else {
+        if (token.value == NULL) {
             pushToken(token);
+            return;
+        } else if (isValidLabelDefinition(token)) {
+            registerLabel(token);
+            pushToken(token);
+        } else if (isMacroDefinitionStart(token)) {
+            registerMacro();
+        } else {
+            int macroIndex = getMacroIndexByName(token.value);
+            if (macroIndex >= 0) {
+                invokeMacro(macroIndex);
+            } else {
+                pushToken(token);
+            }
         }
     }
 }
@@ -236,9 +239,7 @@ struct Token* preprocess(char* assemblySource) {
     sourceString = assemblySource;
     result = calloc(RESULT_SIZE_INCREMENT, sizeof (struct Token));
 
-    do {
-        processToken();
-    } while (result[tokensCount - 1].value != NULL);
+    processTokens();
 
     return result;
 }

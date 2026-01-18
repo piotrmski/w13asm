@@ -516,39 +516,38 @@ static struct Token parseLabelDefinitionsGetNextToken() {
     return token;
 }
 
-/// Returns true if statement parsing should continue
-static bool parseStatement() {
-    int labelDefinitionsStartIndex = labelDefinitionsCount;
-    struct Token firstTokenAfterLabels = parseLabelDefinitionsGetNextToken();
+static void parseStatements() {
+    while (true) {
+        int labelDefinitionsStartIndex = labelDefinitionsCount;
+        struct Token firstTokenAfterLabels = parseLabelDefinitionsGetNextToken();
 
-    if (firstTokenAfterLabels.value == NULL) {
-        if (labelDefinitionsCount > labelDefinitionsStartIndex) {
-            printf("Error on line %d: unexpected label definition at the end of the file.\n", firstTokenAfterLabels.lineNumber);
-            exit(ExitCodeUnexpectedEndOfFile);
+        if (firstTokenAfterLabels.value == NULL) {
+            if (labelDefinitionsCount > labelDefinitionsStartIndex) {
+                printf("Error on line %d: unexpected label definition at the end of the file.\n", firstTokenAfterLabels.lineNumber);
+                exit(ExitCodeUnexpectedEndOfFile);
+            }
+
+            return;
         }
 
-        return false;
+        enum Instruction instruction;
+        enum Directive directive;
+
+        if ((instruction = getInstruction(firstTokenAfterLabels.value)) != InstructionInvalid) {
+            insertInstruction(instruction, firstTokenAfterLabels.lineNumber);
+        } else if ((directive = getDirective(firstTokenAfterLabels.value)) != DirectiveInvalid) {
+            applyDirective(directive, labelDefinitionsStartIndex);
+        } else if (isStringLiteral(firstTokenAfterLabels.value)) {
+            declareString(firstTokenAfterLabels);
+        } else if (isNumberLiteral(firstTokenAfterLabels.value)) {
+            declareNumber(firstTokenAfterLabels);
+        } else if (isCharacterLiteral(firstTokenAfterLabels.value)) {
+            declareCharacter(firstTokenAfterLabels);
+        } else {
+            printf("Error on line %d: invalid token \"%s\".\n", firstTokenAfterLabels.lineNumber, firstTokenAfterLabels.value);
+            exit(ExitCodeInvalidToken);
+        }
     }
-
-    enum Instruction instruction;
-    enum Directive directive;
-
-    if ((instruction = getInstruction(firstTokenAfterLabels.value)) != InstructionInvalid) {
-        insertInstruction(instruction, firstTokenAfterLabels.lineNumber);
-    } else if ((directive = getDirective(firstTokenAfterLabels.value)) != DirectiveInvalid) {
-        applyDirective(directive, labelDefinitionsStartIndex);
-    } else if (isStringLiteral(firstTokenAfterLabels.value)) {
-        declareString(firstTokenAfterLabels);
-    } else if (isNumberLiteral(firstTokenAfterLabels.value)) {
-        declareNumber(firstTokenAfterLabels);
-    } else if (isCharacterLiteral(firstTokenAfterLabels.value)) {
-        declareCharacter(firstTokenAfterLabels);
-    } else {
-        printf("Error on line %d: invalid token \"%s\".\n", firstTokenAfterLabels.lineNumber, firstTokenAfterLabels.value);
-        exit(ExitCodeInvalidToken);
-    }
-
-    return true;
 }
 
 static void resolveLabels() {
@@ -573,7 +572,7 @@ static void resolveLabels() {
 struct AssemblerResult assemble(struct Token* tokens) {
     tokensArray = tokens;
 
-    while (parseStatement()) {}
+    parseStatements();
 
     for (int i = 0; i < ADDRESS_SPACE_SIZE; ++i) {
         if (programMemoryWritten[i]) {

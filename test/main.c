@@ -263,11 +263,11 @@ int main(int argc, const char * argv[]) {
     expectErrorCode("macro-name-should-disallow-collision-with-label-before", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-parameter", ExitCodeNameCollision);
     expectErrorCode("macro-name-should-disallow-collision-with-macro-label", ExitCodeNameCollision);
+    expectErrorCode("macro-name-should-disallow-collision-with-another-macro-label", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-macro-name", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-instruction-name", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-parameter", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-macro-label", ExitCodeNameCollision);
-    expectErrorCode("macro-parameter-name-should-disallow-collision-with-another-macro-label", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-global-label-before", ExitCodeNameCollision);
     expectErrorCode("macro-parameter-name-should-disallow-collision-with-global-label-after", ExitCodeNameCollision);
     expectErrorCode("label-name-inside-macro-should-disallow-collision-with-global-label-before", ExitCodeNameCollision);

@@ -140,7 +140,38 @@ static void registerMacroLabel(int macroIndex, struct Token token) {
     // TODO
 }
 
+static void getMacroArguments(int macroIndex, char** argumentValues) {
+    bool hasNextArg = true;
+    int argumentIndex = 0;
+    int lineNumber;
+    while (hasNextArg) {
+        struct Token token = getNextNonEmptyToken();
+        lineNumber = token.lineNumber;
+        if (token.value[token.length - 1] == ',') {
+            if (argumentIndex == MAX_MACRO_PARAMS) {
+                printf("Error on line %d: macro \"%s\" takes %d arguments, over %d were provided.\n", token.lineNumber, macros[macroIndex].name, macros[macroIndex].paramsCount, MAX_MACRO_PARAMS);
+                exit(ExitCodeInvalidMacroArgumentsCount);
+            }
+            token.value[--token.length] = 0;
+        } else {
+            hasNextArg = false;
+        }
+        argumentValues[argumentIndex++] = token.value;
+    }
+
+    if (argumentIndex != macros[macroIndex].paramsCount) {
+        printf("Error on line %d: macro \"%s\" takes %d arguments, %d were provided.\n", lineNumber, macros[macroIndex].name, macros[macroIndex].paramsCount, argumentIndex);
+        exit(ExitCodeInvalidMacroArgumentsCount);
+    }
+}
+
 static void invokeMacro(int macroIndex) {
+    char* argumentValues[MAX_MACRO_PARAMS] = {0};
+
+    if (macros[macroIndex].paramsCount > 0) {
+        getMacroArguments(macroIndex, argumentValues);
+    }
+
     for (int i = 0; i < macros[macroIndex].tokensCount; ++i) {
         struct Token* token = &macros[macroIndex].tokens[i];
         pushToken((struct Token) { token->value, token->length, token->lineNumber, macros[macroIndex].name, macros[macroIndex].invocationCount });

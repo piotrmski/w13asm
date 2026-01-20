@@ -1,5 +1,4 @@
 #include "assembler.h"
-#include "../shared/shared.h"
 #include "../../common/exit-code.h"
 #include <stdbool.h>
 #include <string.h>
@@ -28,15 +27,14 @@ enum NumberLiteralRange {
 };
 
 struct LabelDefinition {
-    char* name;
+    struct Token token;
     int address;
 };
 
 struct LabelUse {
-    char* name;
+    struct Token token;
     int offset;
     int byte;
-    int lineNumber;
     int address;
 };
 
@@ -46,7 +44,7 @@ struct ImmediateValueUse {
 };
 
 struct LabelUseParseResult {
-    char* name;
+    struct Token token;
     int offset;
 };
 
@@ -174,12 +172,16 @@ static void trimComma(struct Token* token) {
 
 struct LabelDefinition* findLabelDefinition(struct LabelUse* labelUse) {
     for (int i = 0; i < labelDefinitionsCount; ++i) {
-        if (strcmp(labelDefinitions[i].name, labelUse->name) == 0) {
+        bool scopeMatch = labelDefinitions[i].token.macroName == NULL
+            || labelUse->token.macroName != NULL
+                && strcmp(labelDefinitions[i].token.macroName, labelUse->token.macroName) == 0;
+
+        if (scopeMatch && strcmp(labelDefinitions[i].token.value, labelUse->token.value) == 0) {
             return &labelDefinitions[i];
         }
     }
 
-    printf("Error on line %d: label \"%s\" is undefined.\n", labelUse->lineNumber, labelUse->name);
+    printf("Error on line %d: label \"%s\" is undefined.\n", labelUse->token.lineNumber, labelUse->token.value);
     exit(ExitCodeUndefinedLabel);
 }
 
@@ -236,7 +238,7 @@ static struct LabelUseParseResult parseLabelUse(struct Token token) {
         offset = parseNumberLiteral((struct Token) { offsetSign, 0, token.lineNumber, NULL, 0 }, NumberLiteralRangeNone);
         *offsetSign = 0;
     }
-    return (struct LabelUseParseResult) { token.value, offset };
+    return (struct LabelUseParseResult) { token, offset };
 }
 
 static bool isHexDigit(char character) {
@@ -333,9 +335,9 @@ static void insertInstruction(enum Instruction instruction, int lineNumber) {
         assertCanAddLabelUses(2, param.lineNumber);
         struct LabelUseParseResult labelUse = parseLabelUse(param);
         labelUses[labelUsesCount++] =
-            (struct LabelUse) { labelUse.name, labelUse.offset, 0, param.lineNumber, currentAddress };
+            (struct LabelUse) { labelUse.token, labelUse.offset, 0, currentAddress };
         labelUses[labelUsesCount++] =
-            (struct LabelUse) { labelUse.name, labelUse.offset, 1, param.lineNumber, currentAddress + 1 };
+            (struct LabelUse) { labelUse.token, labelUse.offset, 1, currentAddress + 1 };
     } else {
         assertCanAddImmediateValue(param.lineNumber);
         if (!instructionAcceptsImmediateValue(instruction)) {
@@ -419,7 +421,7 @@ static void applyLsbOrMsbDirective(enum Directive directive) {
     result.dataType[currentAddress] = DataTypeInt;
     assertCanAddLabelUses(1, param.lineNumber);
     labelUses[labelUsesCount++] =
-        (struct LabelUse) { labelUse.name, labelUse.offset, byte, param.lineNumber, currentAddress++ };
+        (struct LabelUse) { labelUse.token, labelUse.offset, byte, currentAddress++ };
 }
 
 static void resolveImmediateValues() {
@@ -440,16 +442,15 @@ static void resolveImmediateValues() {
             assertNoMemoryViolation(currentAddress, token.lineNumber);
             assertCanAddLabelDefinition(token.lineNumber);
             labelNamesByImmediateValue[value] = token.value;
-            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, currentAddress };
+            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token, currentAddress };
             result.dataType[currentAddress] = dataType;
             result.programMemory[currentAddress++] = value;
         }
 
         assertCanAddLabelUses(2, token.lineNumber);
-        labelUses[labelUsesCount++] =
-            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 0, token.lineNumber, immediateValueUses[i].address };
-        labelUses[labelUsesCount++] =
-            (struct LabelUse) { labelNamesByImmediateValue[value], 0, 1, token.lineNumber, immediateValueUses[i].address + 1 };
+        struct Token labelUseToken = (struct Token) { labelNamesByImmediateValue[value], 0, token.lineNumber, NULL, 0 };
+        labelUses[labelUsesCount++] = (struct LabelUse) { labelUseToken, 0, 0, immediateValueUses[i].address };
+        labelUses[labelUsesCount++] = (struct LabelUse) { labelUseToken, 0, 1, immediateValueUses[i].address + 1 };
     }
 
     immediateValueUsesCount = 0;
@@ -507,7 +508,7 @@ static struct Token parseLabelDefinitionsGetNextToken() {
         token = getNextToken();
         if (token.value != NULL && isValidLabelDefinitionRemoveColon(token)) {
             assertCanAddLabelDefinition(token.lineNumber);
-            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token.value, currentAddress };
+            labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token, currentAddress };
         } else {
             break;
         }
@@ -552,7 +553,7 @@ static void parseStatements() {
 
 static void resolveLabels() {
     for (int i = labelDefinitionsCount - 1; i >= 0; --i) {
-        result.labelNameByAddress[labelDefinitions[i].address] = labelDefinitions[i].name;
+        result.labelsByAddress[labelDefinitions[i].address] = labelDefinitions[i].token;
     }
 
     for (int i = 0; i < labelUsesCount; ++i) {
@@ -561,7 +562,7 @@ static void resolveLabels() {
         int evaluatedAddress = labelDefinition->address + labelUse->offset;
         
         if (evaluatedAddress < 0 || evaluatedAddress >= ADDRESS_SPACE_SIZE) {
-            printf("Error on line %d: \"%s%s%d\" evaluates to %d, which is an invalid address.\n", labelUse->lineNumber, labelUse->name, labelUse->offset < 0 ? "" : "+", labelUse->offset, evaluatedAddress);
+            printf("Error on line %d: \"%s%s%d\" evaluates to %d, which is an invalid address.\n", labelUse->token.lineNumber, labelUse->token.value, labelUse->offset < 0 ? "" : "+", labelUse->offset, evaluatedAddress);
             exit(ExitCodeReferenceToInvalidAddress);
         }
         

@@ -90,7 +90,7 @@ int main(int argc, const char * argv[]) {
         }
 
         for (int i = 0; i < ADDRESS_SPACE_SIZE; ++i) {
-        if (result.dataType[i] != DataTypeNone || result.labelNameByAddress[i] != NULL) {
+        if (result.dataType[i] != DataTypeNone || result.labelsByAddress[i].value != NULL) {
                 fprintf(symbolsFile, "0x%04X,", i);
                 switch (result.dataType[i]) {
                     case DataTypeInstruction:
@@ -103,7 +103,14 @@ int main(int argc, const char * argv[]) {
                         fprintf(symbolsFile, i == IO_INTERFACE_ADDRESS ? "char" : "int");
                         break;
                 }
-                fprintf(symbolsFile, ",%s\n", result.labelNameByAddress[i] == NULL ? "" : result.labelNameByAddress[i]);
+
+                if (result.labelsByAddress[i].value == NULL) {
+                    fprintf(symbolsFile, ",\n");
+                } else if (result.labelsByAddress[i].macroName == NULL) {
+                    fprintf(symbolsFile, ",%s\n", result.labelsByAddress[i].value);
+                } else {
+                    fprintf(symbolsFile, ",%s@%s.%d\n", result.labelsByAddress[i].value, result.labelsByAddress[i].macroName, result.labelsByAddress[i].macroInvocationIndex);
+                }
             }
         }
         

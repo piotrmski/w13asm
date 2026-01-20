@@ -31,6 +31,63 @@ static struct Macro macros[MAX_MACROS];
 static int incompleteMacrosCount = 0;
 static int completeMacrosCount = 0;
 
+static void assertUniqueAmongGlobalLabelNames(struct Token token) {
+    for (int i = 0; i < labelsCount; ++i) {
+        if (strcmp(token.value, labels[i]) == 0) {
+            printf("Error on line %d: \"%s\" was already defined as a label name.\n", token.lineNumber, token.value);
+            exit(ExitCodeNameCollision);
+        }
+    }
+}
+
+static void assertUniqueAmongMacroNames(struct Token token) {
+    for (int i = 0; i < completeMacrosCount; ++i) {
+        if (strcmp(token.value, macros[i].name) == 0) {
+            printf("Error on line %d: \"%s\" was already defined as a macro name.\n", token.lineNumber, token.value);
+            exit(ExitCodeNameCollision);
+        }
+    }
+}
+
+static void assertUniqueAmongMacroLabelNames(struct Token token, int macroIndex) {
+    for (int i = 0; i < macros[macroIndex].labelsCount; ++i) {
+        if (strcmp(token.value, macros[macroIndex].labels[i]) == 0) {
+            printf("Error on line %d: \"%s\" was already defined as a label name.\n", token.lineNumber, token.value);
+            exit(ExitCodeNameCollision);
+        }
+    }
+}
+
+static void assertUniqueAmongAllMacroLabelNames(struct Token token) {
+    for (int macroIndex = 0; macroIndex < completeMacrosCount; ++macroIndex) {
+        assertUniqueAmongMacroLabelNames(token, macroIndex);
+    }
+}
+
+static void assertUniqueAmongMacroParamNames(struct Token token, int macroIndex) {
+    for (int i = 0; i < macros[macroIndex].paramsCount; ++i) {
+        if (strcmp(token.value, macros[macroIndex].params[i]) == 0) {
+            printf("Error on line %d: \"%s\" was already defined as a parameter name.\n", token.lineNumber, token.value);
+            exit(ExitCodeNameCollision);
+        }
+    }
+}
+
+static void assertUniqueAmongAllMacroParamNames(struct Token token) {
+    for (int macroIndex = 0; macroIndex < completeMacrosCount; ++macroIndex) {
+        assertUniqueAmongMacroParamNames(token, macroIndex);
+    }
+}
+
+static void assertUniqueAmongInstructionNames(struct Token token) {
+    for (int i = 0; i < 8; ++i) {
+        if (strcmp(token.value, getInstructionName(i)) == 0) {
+            printf("Error on line %d: \"%s\" is an instruction name and a macro can't share this name.\n", token.lineNumber, token.value);
+            exit(ExitCodeNameCollision);
+        }
+    }
+}
+
 static struct Token getNextNonEmptyToken() {
     struct Token result = getToken(&sourceString);
     assertTokenNotEmpty(result);
@@ -110,30 +167,21 @@ static int getMacroIndexByName(char* name) {
 }
 
 static void registerLabel(struct Token token) {
-    char* labelName = malloc(token.length - 1);
-    memcpy(labelName, token.value, token.length - 1);
-    labelName[token.length - 1] = 0;
-
-    for (int i = 0; i < incompleteMacrosCount; ++i) {
-        if (strcmp(labelName, macros[i].name) == 0) {
-            printf("Error on line %d: \"%s\" was already defined as a macro name.\n", token.lineNumber, labelName);
-            exit(ExitCodeNameCollision);
-        }
-    }
+    struct Token labelDefinitionToken = (struct Token) { malloc(token.length - 1), token.length - 1, token.lineNumber };
+    memcpy(labelDefinitionToken.value, token.value, token.length - 1);
+    labelDefinitionToken.value[token.length - 1] = 0;
 
     if (labelsCount == MAX_LABEL_DEFS - 1) {
         printf("Error on line %d: too many label definitions.\n", token.lineNumber);
         exit(ExitCodeTooManyLabelDefinitions);
     }
 
-    for (int i = 0; i < labelsCount; ++i) {
-        if (strcmp(labelName, labels[i]) == 0) {
-            printf("Error on line %d: label name \"%s\" is not unique.\n", token.lineNumber, token.value);
-            exit(ExitCodeNameCollision);
-        }
-    }
+    assertUniqueAmongGlobalLabelNames(labelDefinitionToken);
+    assertUniqueAmongMacroNames(labelDefinitionToken);
+    assertUniqueAmongAllMacroLabelNames(labelDefinitionToken);
+    assertUniqueAmongAllMacroParamNames(labelDefinitionToken);
  
-    labels[labelsCount++] = labelName;
+    labels[labelsCount++] = labelDefinitionToken.value;
 }
 
 static void registerMacroLabel(int macroIndex, struct Token token) {

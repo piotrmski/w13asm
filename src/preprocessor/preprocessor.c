@@ -41,7 +41,7 @@ static void assertUniqueAmongGlobalLabelNames(struct Token token) {
 }
 
 static void assertUniqueAmongMacroNames(struct Token token) {
-    for (int i = 0; i < completeMacrosCount; ++i) {
+    for (int i = 0; i < incompleteMacrosCount; ++i) {
         if (strcmp(token.value, macros[i].name) == 0) {
             printf("Error on line %d: \"%s\" was already defined as a macro name.\n", token.lineNumber, token.value);
             exit(ExitCodeNameCollision);
@@ -59,7 +59,7 @@ static void assertUniqueAmongMacroLabelNames(struct Token token, int macroIndex)
 }
 
 static void assertUniqueAmongAllMacroLabelNames(struct Token token) {
-    for (int macroIndex = 0; macroIndex < completeMacrosCount; ++macroIndex) {
+    for (int macroIndex = 0; macroIndex < incompleteMacrosCount; ++macroIndex) {
         assertUniqueAmongMacroLabelNames(token, macroIndex);
     }
 }
@@ -74,7 +74,7 @@ static void assertUniqueAmongMacroParamNames(struct Token token, int macroIndex)
 }
 
 static void assertUniqueAmongAllMacroParamNames(struct Token token) {
-    for (int macroIndex = 0; macroIndex < completeMacrosCount; ++macroIndex) {
+    for (int macroIndex = 0; macroIndex < incompleteMacrosCount; ++macroIndex) {
         assertUniqueAmongMacroParamNames(token, macroIndex);
     }
 }
@@ -109,16 +109,21 @@ static void pushMacroToken(int macroIndex, struct Token token) {
     macros[macroIndex].tokens[macros[macroIndex].tokensCount++] = token;
 }
 
-static void pushMacroLabel(int macroIndex, struct Token token) {
-    char* labelName = malloc(token.length - 1);
-    memcpy(labelName, token.value, token.length - 1);
-    labelName[token.length - 1] = 0;
+static void registerMacroLabel(int macroIndex, struct Token token) {
+    struct Token labelDefinitionToken = (struct Token) { malloc(token.length - 1), token.length - 1, token.lineNumber, NULL, 0 };
+    memcpy(labelDefinitionToken.value, token.value, token.length - 1);
+    labelDefinitionToken.value[token.length - 1] = 0;
+
+    assertUniqueAmongGlobalLabelNames(labelDefinitionToken);
+    assertUniqueAmongMacroNames(labelDefinitionToken);
+    assertUniqueAmongMacroParamNames(labelDefinitionToken, macroIndex);
+    assertUniqueAmongMacroLabelNames(labelDefinitionToken, macroIndex);
 
     int cnt = macros[macroIndex].labelsCount;
     if ((cnt % MACRO_LABELS_SIZE_INCREMENT) == MACRO_LABELS_SIZE_INCREMENT - 1) {
         macros[macroIndex].labels = realloc(macros[macroIndex].labels, sizeof (char*) * (cnt + 1 + MACRO_LABELS_SIZE_INCREMENT));
     }
-    macros[macroIndex].labels[macros[macroIndex].labelsCount++] = labelName;
+    macros[macroIndex].labels[macros[macroIndex].labelsCount++] = labelDefinitionToken.value;
 }
 
 static void assertNameValid(struct Token token, const char* role) {
@@ -167,7 +172,7 @@ static int getMacroIndexByName(char* name) {
 }
 
 static void registerLabel(struct Token token) {
-    struct Token labelDefinitionToken = (struct Token) { malloc(token.length - 1), token.length - 1, token.lineNumber };
+    struct Token labelDefinitionToken = (struct Token) { malloc(token.length - 1), token.length - 1, token.lineNumber, NULL, 0 };
     memcpy(labelDefinitionToken.value, token.value, token.length - 1);
     labelDefinitionToken.value[token.length - 1] = 0;
 
@@ -182,10 +187,6 @@ static void registerLabel(struct Token token) {
     assertUniqueAmongAllMacroParamNames(labelDefinitionToken);
  
     labels[labelsCount++] = labelDefinitionToken.value;
-}
-
-static void registerMacroLabel(int macroIndex, struct Token token) {
-    // TODO
 }
 
 static void getMacroArguments(int macroIndex, char** argumentValues) {
@@ -241,8 +242,14 @@ static void registerMacroParams(int macroIndex) {
         } else {
             hasNextParam = false;
         }
+
         assertNameValid(token, "parameter");
-        // TODO check name collisions
+        assertUniqueAmongGlobalLabelNames(token);
+        assertUniqueAmongInstructionNames(token);
+        assertUniqueAmongMacroNames(token);
+        assertUniqueAmongMacroParamNames(token, macroIndex);
+        assertUniqueAmongMacroLabelNames(token, macroIndex);
+
         macros[macroIndex].params[macros[macroIndex].paramsCount++] = token.value;
     }
 }
@@ -268,6 +275,7 @@ static void registerMacroBody(int macroIndex) {
 static void registerMacro() {
     int macroIndex = incompleteMacrosCount++;
     struct Macro* macro = &macros[macroIndex];
+    macro->name = "";
     macro->paramsCount = 0;
     macro->tokens = calloc(MACRO_BODY_SIZE_INCREMENT, sizeof (struct Token));
     macro->tokensCount = 0;
@@ -278,8 +286,14 @@ static void registerMacro() {
     struct Token name = getNextNonEmptyToken();
     bool hasParams = name.value[name.length - 1] == ',';
     if (hasParams) { name.value[--name.length] = 0; }
+
     assertNameValid(name, "macro");
-    // TODO check collisions
+    assertUniqueAmongGlobalLabelNames(name);
+    assertUniqueAmongInstructionNames(name);
+    assertUniqueAmongMacroNames(name);
+    assertUniqueAmongAllMacroParamNames(name);
+    assertUniqueAmongAllMacroLabelNames(name);
+    
     macro->name = name.value;
 
     if (hasParams) {

@@ -344,6 +344,8 @@ static void insertInstruction(enum Instruction instruction, int lineNumber) {
             printf("Error on line %d: instruction \"%s\" does not accept an immediate value as an argument.\n", param.lineNumber, getInstructionName(instruction));
             exit(ExitCodeInvalidInstructionArgument);
         }
+        param.macroInvocationIndex = 0;
+        param.macroName = NULL;
         immediateValueUses[immediateValueUsesCount++] = (struct ImmediateValueUse) { param, currentAddress };
     }
     result.programMemory[currentAddress++] = instructionCode;

@@ -276,7 +276,9 @@ int main(int argc, const char * argv[]) {
     expectSuccess("macro-should-allow-no-params");
     expectErrorCode("macro-should-disallow-no-beginning", ExitCodeInvalidToken);
     expectErrorCode("macro-should-disallow-no-end", ExitCodeUnexpectedEndOfFile);
+    expectSuccess("macro-should-allow-invoke-macro-in-macro");
     expectErrorCode("macro-should-disallow-recurrence", ExitCodeInvalidToken);
+    expectErrorCode("macro-should-disallow-indirect-recurrence", ExitCodeInvalidToken);
     expectSuccess("macro-should-replace-parts-of-tokens");
     expectSuccess("macro-should-replace-multiple-parts-of-tokens");
     expectErrorCode("macro-should-disallow-nested-definition", ExitCodeNestedMacros);

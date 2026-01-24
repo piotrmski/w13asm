@@ -162,8 +162,8 @@ static bool isMacroDefinitionEnd(struct Token token) {
     return stringsEqualCaseInsensitive(token.value, ".ENDMACRO");
 }
 
-static int getMacroIndexByName(char* name) {
-    for (int i = 0; i < completeMacrosCount; ++i) {
+static int getMacroIndexByName(char* name, int macrosCount) {
+    for (int i = 0; i < macrosCount; ++i) {
         if (strcmp(name, macros[i].name) == 0) {
             return i;
         }
@@ -223,7 +223,19 @@ static void invokeMacro(int macroIndex) {
 
     for (int i = 0; i < macros[macroIndex].tokensCount; ++i) {
         struct Token* token = &macros[macroIndex].tokens[i];
-        pushToken((struct Token) { token->value, token->length, token->lineNumber, macros[macroIndex].name, macros[macroIndex].invocationCount });
+
+        int nestedMacroIndex = getMacroIndexByName(token->value, macroIndex);
+        if (nestedMacroIndex >= 0) {
+            invokeMacro(nestedMacroIndex);
+        } else {
+            pushToken((struct Token) { 
+                token->value, 
+                token->length, 
+                token->lineNumber, 
+                macros[macroIndex].name, 
+                macros[macroIndex].invocationCount 
+            });
+        }
     }
 
     ++macros[macroIndex].invocationCount;
@@ -318,7 +330,7 @@ static void processTokens() {
         } else if (isMacroDefinitionStart(token)) {
             registerMacro();
         } else {
-            int macroIndex = getMacroIndexByName(token.value);
+            int macroIndex = getMacroIndexByName(token.value, completeMacrosCount);
             if (macroIndex >= 0) {
                 invokeMacro(macroIndex);
             } else {

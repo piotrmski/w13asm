@@ -79,10 +79,10 @@ static void assertUniqueAmongAllMacroParamNames(struct Token token) {
     }
 }
 
-static void assertUniqueAmongInstructionNames(struct Token token) {
+static void assertUniqueAmongInstructionNames(struct Token token, const char* role) {
     for (int i = 0; i < 8; ++i) {
-        if (strcmp(token.value, getInstructionName(i)) == 0) {
-            printf("Error on line %d: \"%s\" is an instruction name and a macro can't share this name.\n", token.lineNumber, token.value);
+        if (stringsEqualCaseInsensitive(token.value, getInstructionName(i))) {
+            printf("Error on line %d: \"%s\" is an instruction name and a %s can't share this name.\n", token.lineNumber, token.value, role);
             exit(ExitCodeNameCollision);
         }
     }
@@ -245,7 +245,7 @@ static void registerMacroParams(int macroIndex) {
 
         assertNameValid(token, "parameter");
         assertUniqueAmongGlobalLabelNames(token);
-        assertUniqueAmongInstructionNames(token);
+        assertUniqueAmongInstructionNames(token, "parameter");
         assertUniqueAmongMacroNames(token);
         assertUniqueAmongMacroParamNames(token, macroIndex);
         assertUniqueAmongMacroLabelNames(token, macroIndex);
@@ -289,7 +289,7 @@ static void registerMacro() {
 
     assertNameValid(name, "macro");
     assertUniqueAmongGlobalLabelNames(name);
-    assertUniqueAmongInstructionNames(name);
+    assertUniqueAmongInstructionNames(name, "macro");
     assertUniqueAmongMacroNames(name);
     assertUniqueAmongAllMacroParamNames(name);
     assertUniqueAmongAllMacroLabelNames(name);

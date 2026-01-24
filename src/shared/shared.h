@@ -29,7 +29,7 @@ enum Instruction {
 
 char charUppercase(char ch);
 
-bool stringsEqualCaseInsensitive(char* string1, char* string2);
+bool stringsEqualCaseInsensitive(const char* string1, const char* string2);
 
 const char* getInstructionName(enum Instruction instruction);
 

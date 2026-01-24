@@ -7,7 +7,7 @@ char charUppercase(char ch) {
     else return ch;
 }
 
-bool stringsEqualCaseInsensitive(char* string1, char* string2) {
+bool stringsEqualCaseInsensitive(const char* string1, const char* string2) {
     if (string1 == NULL || string2 == NULL) {
         return false;
     }

@@ -198,12 +198,15 @@ static struct Token getNextNonEmptyToken() {
     return result;
 }
 
-static bool isValidLabelDefinitionRemoveColon(struct Token token) {
-    if (token.value[token.length - 1] != ':') {
+static bool isValidLabelDefinitionRemoveColon(struct Token* token) {
+    if (token->value[token->length - 1] != ':') {
         return false;
     }
 
-    token.value[--token.length] = 0; // Trim the trailing colon character
+    char* fullTokenValue = token->value;
+    token->value = malloc(token->length - 1);
+    memcpy(token->value, fullTokenValue, token->length - 1);
+    token->value[--token->length] = 0;
 
     return true;
 }
@@ -508,7 +511,7 @@ static struct Token parseLabelDefinitionsGetNextToken() {
 
     while (true) {
         token = getNextToken();
-        if (token.value != NULL && isValidLabelDefinitionRemoveColon(token)) {
+        if (token.value != NULL && isValidLabelDefinitionRemoveColon(&token)) {
             assertCanAddLabelDefinition(token.lineNumber);
             labelDefinitions[labelDefinitionsCount++] = (struct LabelDefinition) { token, currentAddress };
         } else {

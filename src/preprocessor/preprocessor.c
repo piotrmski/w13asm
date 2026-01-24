@@ -196,12 +196,15 @@ static void getMacroArguments(int macroIndex, char** argumentValues) {
     while (hasNextArg) {
         struct Token token = getNextNonEmptyToken();
         lineNumber = token.lineNumber;
-        if (token.value[token.length - 1] == ',') {
+        char* argumentValue = token.value;
+        if (argumentValue[token.length - 1] == ',') {
             if (argumentIndex == MAX_MACRO_PARAMS) {
                 printf("Error on line %d: macro \"%s\" takes %d arguments, over %d were provided.\n", token.lineNumber, macros[macroIndex].name, macros[macroIndex].paramsCount, MAX_MACRO_PARAMS);
                 exit(ExitCodeInvalidMacroArgumentsCount);
             }
-            token.value[--token.length] = 0;
+            argumentValue = malloc(token.length - 1);
+            memcpy(argumentValue, token.value, token.length - 1);
+            argumentValue[token.length - 1] = 0;
         } else {
             hasNextArg = false;
         }
@@ -214,6 +217,16 @@ static void getMacroArguments(int macroIndex, char** argumentValues) {
     }
 }
 
+static void replaceParamsWithArgs(int macroIndex, struct Token* token, char** argumentValues) {
+    for (int i = 0; i < macros[macroIndex].paramsCount; ++i) {
+        if (strcmp(macros[macroIndex].params[i], token->value) == 0) {
+            token->value = argumentValues[i];
+            token->length = strlen(argumentValues[i]);
+            return;
+        }
+    }
+}
+
 static void invokeMacro(int macroIndex) {
     char* argumentValues[MAX_MACRO_PARAMS] = {0};
 
@@ -222,19 +235,17 @@ static void invokeMacro(int macroIndex) {
     }
 
     for (int i = 0; i < macros[macroIndex].tokensCount; ++i) {
-        struct Token* token = &macros[macroIndex].tokens[i];
+        struct Token token = macros[macroIndex].tokens[i];
+        token.macroName = macros[macroIndex].name;
+        token.macroInvocationIndex = macros[macroIndex].invocationCount;
 
-        int nestedMacroIndex = getMacroIndexByName(token->value, macroIndex);
+        replaceParamsWithArgs(macroIndex, &token, argumentValues);
+
+        int nestedMacroIndex = getMacroIndexByName(token.value, macroIndex);
         if (nestedMacroIndex >= 0) {
             invokeMacro(nestedMacroIndex);
         } else {
-            pushToken((struct Token) { 
-                token->value, 
-                token->length, 
-                token->lineNumber, 
-                macros[macroIndex].name, 
-                macros[macroIndex].invocationCount 
-            });
+            pushToken(token);
         }
     }
 

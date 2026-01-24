@@ -208,7 +208,7 @@ static void getMacroArguments(int macroIndex, char** argumentValues) {
         } else {
             hasNextArg = false;
         }
-        argumentValues[argumentIndex++] = token.value;
+        argumentValues[argumentIndex++] = argumentValue;
     }
 
     if (argumentIndex != macros[macroIndex].paramsCount) {

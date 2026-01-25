@@ -174,7 +174,8 @@ struct LabelDefinition* findLabelDefinition(struct LabelUse* labelUse) {
     for (int i = 0; i < labelDefinitionsCount; ++i) {
         bool scopeMatch = labelDefinitions[i].token.macroName == NULL
             || labelUse->token.macroName != NULL
-                && strcmp(labelDefinitions[i].token.macroName, labelUse->token.macroName) == 0;
+                && strcmp(labelDefinitions[i].token.macroName, labelUse->token.macroName) == 0
+                && labelDefinitions[i].token.macroInvocationIndex == labelUse->token.macroInvocationIndex;
 
         if (scopeMatch && strcmp(labelDefinitions[i].token.value, labelUse->token.value) == 0) {
             return &labelDefinitions[i];

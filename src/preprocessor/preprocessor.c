@@ -212,8 +212,6 @@ static void getMacroArguments(int macroIndex, char** argumentValues) {
 }
 
 static char* strReplace(char* sourceString, int sourceReplaceOffset, int sourceReplaceCnt, char* replacement) {
-    // TODO remove following lines
-    printf("Attempting to replace in '%s' characters from %d to %d excl. with '%s'.\n", sourceString, sourceReplaceOffset, sourceReplaceOffset + sourceReplaceCnt, replacement);
     int lengthToPaste = strlen(replacement);
     int newLength = strlen(sourceString) - sourceReplaceCnt + lengthToPaste;
     char* result = malloc(newLength + 1);

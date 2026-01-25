@@ -203,10 +203,7 @@ static bool isValidLabelDefinitionRemoveColon(struct Token* token) {
         return false;
     }
 
-    char* fullTokenValue = token->value;
-    token->value = malloc(token->length - 1);
-    memcpy(token->value, fullTokenValue, token->length - 1);
-    token->value[--token->length] = 0;
+    token->value = strndup(token->value, token->length - 1);
 
     return true;
 }

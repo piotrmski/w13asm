@@ -110,9 +110,7 @@ static void pushMacroToken(int macroIndex, struct Token token) {
 }
 
 static void registerMacroLabel(int macroIndex, struct Token token) {
-    struct Token labelDefinitionToken = (struct Token) { malloc(token.length - 1), token.length - 1, token.lineNumber, NULL, 0 };
-    memcpy(labelDefinitionToken.value, token.value, token.length - 1);
-    labelDefinitionToken.value[token.length - 1] = 0;
+    struct Token labelDefinitionToken = (struct Token) { strndup(token.value, token.length - 1), token.length - 1, token.lineNumber, NULL, 0 };
 
     assertUniqueAmongGlobalLabelNames(labelDefinitionToken);
     assertUniqueAmongMacroNames(labelDefinitionToken);
@@ -172,9 +170,7 @@ static int getMacroIndexByName(char* name, int macrosCount) {
 }
 
 static void registerLabel(struct Token token) {
-    struct Token labelDefinitionToken = (struct Token) { malloc(token.length - 1), token.length - 1, token.lineNumber, NULL, 0 };
-    memcpy(labelDefinitionToken.value, token.value, token.length - 1);
-    labelDefinitionToken.value[token.length - 1] = 0;
+    struct Token labelDefinitionToken = (struct Token) { strndup(token.value, token.length - 1), token.length - 1, token.lineNumber, NULL, 0 };
 
     if (labelsCount == MAX_LABEL_DEFS - 1) {
         printf("Error on line %d: too many label definitions.\n", token.lineNumber);
@@ -202,9 +198,7 @@ static void getMacroArguments(int macroIndex, char** argumentValues) {
                 printf("Error on line %d: macro \"%s\" takes %d arguments, over %d were provided.\n", token.lineNumber, macros[macroIndex].name, macros[macroIndex].paramsCount, MAX_MACRO_PARAMS);
                 exit(ExitCodeInvalidMacroArgumentsCount);
             }
-            argumentValue = malloc(token.length - 1);
-            memcpy(argumentValue, token.value, token.length - 1);
-            argumentValue[token.length - 1] = 0;
+            argumentValue = strndup(token.value, token.length - 1);
         } else {
             hasNextArg = false;
         }
@@ -217,6 +211,19 @@ static void getMacroArguments(int macroIndex, char** argumentValues) {
     }
 }
 
+static char* strReplace(char* sourceString, int sourceReplaceOffset, int sourceReplaceCnt, char* replacement) {
+    // TODO remove following lines
+    printf("Attempting to replace in '%s' characters from %d to %d excl. with '%s'.\n", sourceString, sourceReplaceOffset, sourceReplaceOffset + sourceReplaceCnt, replacement);
+    int lengthToPaste = strlen(replacement);
+    int newLength = strlen(sourceString) - sourceReplaceCnt + lengthToPaste;
+    char* result = malloc(newLength + 1);
+    int replaceEndOffset = sourceReplaceOffset + sourceReplaceCnt;
+    memcpy(result, sourceString, sourceReplaceOffset);
+    memcpy(result + sourceReplaceOffset, replacement, lengthToPaste);
+    memcpy(result + sourceReplaceOffset + lengthToPaste, sourceString + sourceReplaceOffset + sourceReplaceCnt, strlen(sourceString + sourceReplaceOffset + sourceReplaceCnt) + 1);
+    return result;
+}
+
 static void replaceParamsWithArgs(int macroIndex, struct Token* token, char** argumentValues) {
     for (int i = 0; i < macros[macroIndex].paramsCount; ++i) {
         if (strcmp(macros[macroIndex].params[i], token->value) == 0) {
@@ -225,6 +232,35 @@ static void replaceParamsWithArgs(int macroIndex, struct Token* token, char** ar
             return;
         }
     }
+
+    int replaceOffsetStart = 0;
+    char* replaceCharStart;
+    while ((replaceCharStart = strstr(token->value + replaceOffsetStart, "${")) != NULL) {
+        replaceOffsetStart = replaceCharStart - token->value;
+        char* partialReplaceEnd = strchr(token->value + replaceOffsetStart, '}');
+        if (partialReplaceEnd == NULL) {
+            ++replaceOffsetStart;
+            continue;
+        }
+
+        *partialReplaceEnd = 0;
+        bool replaced = false;
+        for (int i = 0; i < macros[macroIndex].paramsCount; ++i) {
+            if (strcmp(macros[macroIndex].params[i], token->value + replaceOffsetStart + 2) == 0) {
+                *partialReplaceEnd = '}';
+                token->value = strReplace(token->value, replaceOffsetStart, partialReplaceEnd - token->value - replaceOffsetStart + 1, argumentValues[i]);
+                replaced = true;
+                replaceOffsetStart += strlen(argumentValues[i]);
+                break;
+            }
+        }
+
+        if (!replaced) {
+            *partialReplaceEnd = '}';
+            ++replaceOffsetStart;
+        }
+    }
+    token->length = strlen(token->value);
 }
 
 static void invokeMacro(int macroIndex) {

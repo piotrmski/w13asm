@@ -166,8 +166,7 @@ static void trimComma(struct Token* token) {
         exit(ExitCodeMissingComma);
     }
 
-    token->length--;
-    token->value[token->length] = 0;
+    token->value = strndup(token->value, --token->length);
 }
 
 struct LabelDefinition* findLabelDefinition(struct LabelUse* labelUse) {
@@ -204,7 +203,7 @@ static bool isValidLabelDefinitionRemoveColon(struct Token* token) {
         return false;
     }
 
-    token->value = strndup(token->value, token->length - 1);
+    token->value = strndup(token->value, --token->length);
 
     return true;
 }
@@ -237,7 +236,7 @@ static struct LabelUseParseResult parseLabelUse(struct Token token) {
     int offset = 0;
     if (offsetSign != NULL) {
         offset = parseNumberLiteral((struct Token) { offsetSign, 0, token.lineNumber, NULL, 0 }, NumberLiteralRangeNone);
-        *offsetSign = 0;
+        token.value = strndup(token.value, offsetSign - token.value);
     }
     return (struct LabelUseParseResult) { token, offset };
 }
